@@ -2660,6 +2660,20 @@
     nb(t0, 1.5, "bandpass", 1400, 1100, 0.8, 0.02, 0.1);   // 숨소리 조금
     osc.start(t0); vib.start(t0); osc.stop(t0 + 1.6); vib.stop(t0 + 1.6);
   }
+  const BURNT_STYLE = "groan";   // 탄 마시멜로 먹을 때: "groan" 으으 / "cough" 콜록 + 재 연기 / "both" 둘 다
+  function coughAt(t0) {   // '콜록콜록': 목에서 터지는 잡음 + 짧은 'ㅗ' 목소리, 두 번
+    const ctx = audio.ctx;
+    [0, 0.17, 0.5, 0.66].forEach(function (d, i) {
+      const k = (i % 2 === 0 ? 1 : 0.6) * (i < 2 ? 1 : 0.75), t = t0 + d;
+      nb(t, 0.13, "bandpass", 1100, 600, 1.2, 0.32 * k, 0.006);
+      const osc = ctx.createOscillator(), env = ctx.createGain();
+      osc.type = "sawtooth"; osc.frequency.setValueAtTime(230, t); osc.frequency.exponentialRampToValueAtTime(170, t + 0.11);
+      env.gain.setValueAtTime(0.0001, t); env.gain.exponentialRampToValueAtTime(0.3 * k, t + 0.012); env.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      osc.connect(env);
+      [[520, 3, 1], [900, 5, 0.5]].forEach(function (fm) { const bp = filter(ctx, "bandpass", fm[0]), g = ctx.createGain(); bp.Q.value = fm[1]; g.gain.value = fm[2] * 0.5; env.connect(bp); bp.connect(g); g.connect(audio.master); });
+      osc.start(t); osc.stop(t + 0.14);
+    });
+  }
   function playEat(kind) {
     if (!audio || !audio.on) { console.log("[🔊 eat] 소리 꺼짐 -> 안 남:", kind); return; }
     const t = audio.ctx.currentTime + 0.02;
@@ -2674,7 +2688,8 @@
     } else {                        // 탄 것: 숯이 '푸석' 부서지고 -> '으으…'
       crunchAt(t, 1.1, 900, 3000, 40, 0.16);
       nb(t + 0.02, 0.22, "lowpass", 900, 300, 0.7, 0.12, 0.02);
-      groanAt(t + 0.55);
+      if (BURNT_STYLE !== "cough") groanAt(t + 0.55);
+      if (BURNT_STYLE !== "groan") coughAt(t + (BURNT_STYLE === "both" ? 2.1 : 0.55));
     }
     console.log("[🔊 eat] 먹는 소리 ->", kind);
   }
@@ -3658,6 +3673,7 @@
     const st = MALLOW_STAGES[mallowStage(mallow.cook)];
     mallow.eaten++;
     playEat(st.sound);
+    if (st.sound === "burnt" && BURNT_STYLE !== "groan") ashDelay = BURNT_STYLE === "both" ? 2.1 : 0.55;
     note(st.face + " " + st.taste + " (오늘 " + mallow.eaten + "개째)", 5000);
     console.log("[🍡 mallow] 먹음 -> 익은 정도:", mallow.cook.toFixed(2), "| 단계:", st.name, "| 소리:", st.sound, "| 지금까지:", mallow.eaten);
   }
@@ -3790,7 +3806,24 @@
     return P;
   }
   function takeParticle(P) { for (let i = 0; i < P.list.length; i++) if (!P.list[i].on) { P.list[i].i = i; return P.list[i]; } return null; }
-  const powder = particlePool(150, false), glints = particlePool(120, true);
+  const powder = particlePool(150, false), glints = particlePool(120, true), ashes = particlePool(36, false);
+  let ashDelay = -1;
+  function ashPuff() {   // 탄 걸 먹고 콜록: 입(화면 아래 가운데)에서 검은 재 연기가 퐁
+    for (let k = 0; k < 18; k++) {
+      const g = takeParticle(ashes);
+      if (!g) break;
+      camPoint(_sp, 0.42, (Math.random() - 0.5) * 0.08, -0.13);
+      g.on = true; g.age = 0; g.life = 1.1 + Math.random() * 0.8;
+      g.x = _sp.x; g.y = _sp.y; g.z = _sp.z;
+      g.vx = camF.x * (0.15 + Math.random() * 0.25) + (Math.random() - 0.5) * 0.12; g.vz = camF.z * (0.15 + Math.random() * 0.25) + (Math.random() - 0.5) * 0.12;
+      g.vy = 0.22 + Math.random() * 0.25;
+      g.s0 = 0.04 + Math.random() * 0.05;
+      const v = 0.17 + Math.random() * 0.12, i = g.i;   // 불빛을 받은 회갈색 재
+      ashes.col[i * 3] = v * 1.12; ashes.col[i * 3 + 1] = v; ashes.col[i * 3 + 2] = v * 0.88;
+    }
+    ashes.geo.attributes.aColor.needsUpdate = true;
+    console.log("[💨 ash] 콜록 -> 재 연기 퐁");
+  }
   const POWDER_G = 5.5;   // 가루는 가벼워서 중력을 조금 약하게
   const SPRINKLE = { LEN: 1.9, N: 110 };
   const sprinkle = { t: -1, el: 0, why: "", next: -1, nextWhy: "", emitted: 0, id: 0, landedId: 0 };
@@ -3846,7 +3879,7 @@
   }
   function updateParticles(dt) {
     const sc = renderer.getDrawingBufferSize(_v2).y / 2;
-    powder.mat.uniforms.uScale.value = sc; glints.mat.uniforms.uScale.value = sc;
+    powder.mat.uniforms.uScale.value = sc; glints.mat.uniforms.uScale.value = sc; ashes.mat.uniforms.uScale.value = sc;
     let any = false;
     for (let i = 0; i < powder.list.length; i++) {
       const p = powder.list[i];
@@ -3873,6 +3906,22 @@
     }
     glints.pts.visible = any;
     glints.geo.attributes.position.needsUpdate = true; glints.geo.attributes.aAlpha.needsUpdate = true;
+    if (ashDelay >= 0) { ashDelay -= dt; if (ashDelay < 0) ashPuff(); }
+    any = false;
+    for (let i = 0; i < ashes.list.length; i++) {
+      const g = ashes.list[i];
+      if (!g.on) { ashes.alpha[i] = 0; continue; }
+      g.age += dt;
+      if (g.age >= g.life) { g.on = false; ashes.alpha[i] = 0; continue; }
+      any = true;
+      g.x += g.vx * dt; g.y += g.vy * dt; g.z += g.vz * dt;
+      const k = g.age / g.life;
+      ashes.pos[i * 3] = g.x; ashes.pos[i * 3 + 1] = g.y; ashes.pos[i * 3 + 2] = g.z;
+      ashes.size[i] = g.s0 * (1 + 2.5 * k);
+      ashes.alpha[i] = 0.85 * Math.min(1, k * 6) * Math.pow(1 - k, 1.2);
+    }
+    ashes.pts.visible = any;
+    ashes.geo.attributes.position.needsUpdate = true; ashes.geo.attributes.aAlpha.needsUpdate = true; ashes.geo.attributes.aSize.needsUpdate = true;
   }
   function updateSprinkle(dt) {   // updateCamera 다음에 불러요
     const atFire = state.mode === "play" && !!player.seat && player.seat.kind === "fire";
