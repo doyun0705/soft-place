@@ -591,11 +591,45 @@
       [[0, 0], [w, 0], [-w, 0], [0, h], [0, -h]].forEach(function (o) { g.beginPath(); g.ellipse(x + o[0], y + o[1], rad, rad * (0.5 + r() * 0.5), r() * 3, 0, 6.29); g.fill(); });
     }
   }
-  const snowTex = groundTexture(256, 12, function (g, w, h) {   // 눈밭: 바람에 쓸린 얼룩 + 반짝이는 알갱이
-    g.fillStyle = "#d4dbea"; g.fillRect(0, 0, w, h);
-    speckle(g, w, h, 5, 90, ["rgba(170,182,210,0.10)", "rgba(255,255,255,0.12)", "rgba(150,165,200,0.08)"], 8, 30);
-    speckle(g, w, h, 6, 500, ["rgba(255,255,255,0.5)", "rgba(190,200,225,0.35)"], 0.4, 1.1);
+  function softBlobs(g, w, h, seed, n, colors, rmin, rmax) {   // 가장자리가 스르르 사라지는 둥근 얼룩 (이음매 없이 반복)
+    const r = mulberry32(seed);
+    for (let i = 0; i < n; i++) {
+      const x = r() * w, y = r() * h, rad = rmin + r() * (rmax - rmin), col = colors[Math.floor(r() * colors.length)];
+      [[0, 0], [w, 0], [-w, 0], [0, h], [0, -h], [w, h], [-w, -h], [w, -h], [-w, h]].forEach(function (o) {
+        const gr = g.createRadialGradient(x + o[0], y + o[1], 0, x + o[0], y + o[1], rad);
+        gr.addColorStop(0, col); gr.addColorStop(1, "rgba(0,0,0,0)");
+        g.fillStyle = gr; g.fillRect(x + o[0] - rad, y + o[1] - rad, rad * 2, rad * 2);
+      });
+    }
+  }
+  const snowTex = groundTexture(512, 16, function (g, w, h) {   // 뽀송한 눈: 바람이 빚은 부드러운 물결 그늘 + 고운 알갱이 (사진처럼 말고 예쁘게)
+    g.fillStyle = "#e7ecf8"; g.fillRect(0, 0, w, h);
+    softBlobs(g, w, h, 5, 40, ["rgba(150,168,218,0.09)", "rgba(172,186,228,0.07)"], 50, 150);
+    softBlobs(g, w, h, 6, 26, ["rgba(255,255,255,0.14)"], 30, 100);
+    speckle(g, w, h, 7, 1600, ["rgba(255,255,255,0.4)", "rgba(205,214,238,0.3)"], 0.5, 1.2);
   });
+  // 눈 반짝이: 걸으면 카메라 위치에 따라 눈 알갱이가 반짝반짝 (가까운 곳만)
+  const snowGlitter = { t: { value: 0 } };
+  function snowify(mat) {
+    mat.onBeforeCompile = function (sh) {
+      sh.uniforms.uSnowT = snowGlitter.t;
+      sh.vertexShader = "varying vec3 vSnowW;\n" + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n vSnowW = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+      sh.fragmentShader = "uniform float uSnowT;\nvarying vec3 vSnowW;\nfloat snowHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n" +
+        sh.fragmentShader.replace("#include <fog_fragment>", `
+        {
+          vec2 q = vSnowW.xz * 4.0, cell = floor(q), f = fract(q);
+          float h = snowHash(cell), dist = length(vSnowW - cameraPosition);
+          if (h > 0.9 && dist < 34.0) {
+            vec2 c = vec2(snowHash(cell + 1.3), snowHash(cell + 7.1)) * 0.8 + 0.1;
+            float tw = pow(max(0.0, sin(h * 517.0 + dot(cameraPosition.xz, vec2(1.9, 1.3)) * 1.4 + uSnowT * (0.6 + h))), 16.0);
+            float sp = (1.0 - smoothstep(0.0, 0.11, length(f - c))) * tw * (1.0 - smoothstep(14.0, 34.0, dist));
+            gl_FragColor.rgb += vec3(0.8, 0.88, 1.0) * sp * 1.4;
+          }
+        }
+        #include <fog_fragment>`);
+    };
+    return mat;
+  }
   const dirtTex = groundTexture(512, 8, function (g, w, h) {   // 캠핑장 흙: 자갈 + 마른 솔잎 + 잔가지
     g.fillStyle = "#7a6c5c"; g.fillRect(0, 0, w, h);
     speckle(g, w, h, 8, 220, ["rgba(60,48,38,0.09)", "rgba(140,125,105,0.07)", "rgba(95,82,68,0.1)"], 14, 60);
@@ -892,11 +926,10 @@
   groundShape.moveTo(-200, -200); groundShape.lineTo(200, -200); groundShape.lineTo(200, -cliffZ(200));
   for (let x = 198; x >= -200; x -= 2) groundShape.lineTo(x, -cliffZ(x));
   groundShape.lineTo(-200, -200);
-  const ground = addMesh(new THREE.ShapeGeometry(groundShape), lambert(0xc3cce4, { map: snowTex }), 0, 0, 0);
-  useReal(ground.material, "map", "snow_01_diff_1k.jpg", 1 / 7, 1 / 7, true, function (m) { m.color.setHex(0xd2daf0); });   // 넓은 눈밭은 가볍게 사진만 (빛 계산은 그대로)
+  const ground = addMesh(new THREE.ShapeGeometry(groundShape), snowify(lambert(0xcad3ee, { map: snowTex })), 0, 0, 0);   // 눈은 사진 말고 예쁘고 뽀송하게 (도윤)
   ground.rotation.x = -Math.PI / 2;
   walkables.push(ground);
-  zoneGround(P, 0xc9d2ec, 0, 0, 0.6);
+  zoneGround(P, 0xc9d2ec, 0, 0, 0.6).material = snowify(lambert(0xd0d8f0, { map: snowTex }));   // 광장도 같은 눈
   ZONES.forEach(function (zn) {
     (zn.gates || (zn.gate ? [zn.gate] : [])).forEach(function (gt) { clearings.push({ x: gt.x, z: gt.z, r: 3.4 }); });
     if (zn.gates) clearings.push({ x: zn.x, z: zn.z, r: zn.r + 1 });   // 모퉁이 쉼터 안에는 숲 나무가 들어오지 않게
@@ -3274,6 +3307,81 @@
     updateEmoji(myEmoji);
   }
 
+  // ---- 👣 눈 발자국: 걸으면 눈에 동글동글 발자국이 남고, 30초쯤 지나면 눈에 덮여 사라져요 ----
+  const PRINTS = { N: 500, LIFE: 30, FADE: 12, STRIDE: 0.85 };
+  const printBorn = new Float32Array(PRINTS.N).fill(-999);
+  const printMesh = (function () {
+    const geo = new THREE.PlaneGeometry(0.56, 0.72);
+    geo.rotateX(-Math.PI / 2);
+    geo.setAttribute("aBorn", new THREE.InstancedBufferAttribute(printBorn, 1));
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uNow: { value: 0 } },
+      vertexShader: `
+        attribute float aBorn; uniform float uNow; varying vec2 vUv; varying float vA;
+        void main() {
+          vUv = uv;
+          vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+          float age = uNow - aBorn;
+          vA = smoothstep(0.0, 0.15, age) * (1.0 - smoothstep(${PRINTS.LIFE - PRINTS.FADE}.0, ${PRINTS.LIFE}.0, age)) * (1.0 - smoothstep(40.0, 70.0, distance(wp.xyz, cameraPosition)));
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }`,
+      fragmentShader: `
+        varying vec2 vUv; varying float vA;
+        void main() {
+          vec2 p = (vUv - 0.5) * 2.0;
+          float d = length(p * vec2(1.0, 0.92));
+          float m = 1.0 - smoothstep(0.6, 1.0, d);                         // 둥근 발자국, 가장자리는 부드럽게
+          float shade = m * (0.55 + 0.45 * (1.0 - smoothstep(0.0, 0.75, d))) * (0.8 + 0.2 * p.y);   // 안쪽이 더 깊어요
+          gl_FragColor = vec4(mix(vec3(1.0), vec3(0.76, 0.82, 0.97), shade * vA), 1.0);   // 곱하기: 1이면 그대로, 파르스름하게 눌린 그늘
+        }`,
+      blending: THREE.MultiplyBlending, transparent: true, depthWrite: false
+    });
+    const m = new THREE.InstancedMesh(geo, mat, PRINTS.N);
+    m.frustumCulled = false;
+    const hide = new THREE.Matrix4().makeScale(0, 0, 0);
+    for (let i = 0; i < PRINTS.N; i++) m.setMatrixAt(i, hide);
+    scene.add(m);
+    return m;
+  })();
+  const printState = { i: 0, me: null };
+  const _pd = new THREE.Object3D();
+  function snowAt(x, z) {   // 발자국이 남는 곳: 눈밭·광장·눈길 (다른 구역 바닥, 다리, 개울, 절벽 밖은 빼요)
+    if (groundHeightAt(x, z) > 0.05 || overCliff(x, z, 0.5)) return false;
+    for (let i = 1; i < ZONES.length; i++) { const zn = ZONES[i]; if (Math.hypot(x - zn.x, z - zn.z) < zn.r + 0.5) return false; }
+    for (let i = 0; i < streamLine.length; i++) if (Math.hypot(x - streamLine[i][0], z - streamLine[i][1]) < 2.6) return false;
+    return true;
+  }
+  function stampPrint(x, z, heading, side, now) {
+    const rx = Math.cos(heading) * 0.36 * side, rz = -Math.sin(heading) * 0.36 * side;   // 몸 가운데에서 왼쪽·오른쪽으로
+    if (!snowAt(x + rx, z + rz)) return;
+    _pd.position.set(x + rx, 0.075, z + rz);
+    _pd.rotation.set(0, heading + side * 0.08, 0);
+    _pd.scale.setScalar(0.92 + Math.random() * 0.14);
+    _pd.updateMatrix();
+    printMesh.setMatrixAt(printState.i, _pd.matrix);
+    printBorn[printState.i] = now;
+    printMesh.instanceMatrix.needsUpdate = true;
+    printMesh.geometry.attributes.aBorn.needsUpdate = true;
+    printState.i = (printState.i + 1) % PRINTS.N;
+  }
+  function trackPrints(tr, pos, heading, moving, now) {   // 걸은 거리만큼 왼발·오른발 번갈아 꾹
+    if (!tr.last) { tr.last = new THREE.Vector3().copy(pos); tr.acc = 0; tr.side = 1; return; }
+    const d = Math.hypot(pos.x - tr.last.x, pos.z - tr.last.z);
+    tr.last.copy(pos);
+    if (!moving || d > 3) { tr.acc = 0; return; }   // 멈췄거나 순간이동(앉기 등)
+    tr.acc += d;
+    while (tr.acc > PRINTS.STRIDE) { tr.acc -= PRINTS.STRIDE; stampPrint(pos.x, pos.z, heading, tr.side, now); tr.side = -tr.side; }
+  }
+  function updatePrints(t) {
+    printMesh.material.uniforms.uNow.value = t;
+    snowGlitter.t.value = t % 1000;
+    if (state.mode === "play") {
+      printState.me = printState.me || {};
+      trackPrints(printState.me, player.pos, player.heading, player.moving && !player.seat, t);
+    }
+    Object.keys(others).forEach(function (id) { const o = others[id]; o.prints = o.prints || {}; trackPrints(o.prints, o.pos, o.heading, o.moving, t); });   // 같이 있는 사람 발자국도
+  }
+
   // =====================================================================
   // 9. 매 프레임 업데이트
   // =====================================================================
@@ -4240,6 +4348,7 @@
     updateAudio(dt);
     updateNet();
     updateOthers(dt);
+    updatePrints(t);
     updateCamera(dt);
     updateCamBasis();
     updateMallow(dt, t);   // 1인칭 손·꼬챙이는 카메라 기준이라 카메라 다음에
