@@ -543,6 +543,46 @@
     tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
     return tex;
   }
+  // ---- 📷 진짜 사진 텍스처 (Poly Haven, CC0): textures/ 폴더에서 불러와요. 못 불러오면 그림 텍스처가 그대로 남아요 ----
+  const TEX_DIR = "textures/", texLoader = new THREE.TextureLoader(), texCache = {};
+  const flatNormal = new THREE.DataTexture(new Uint8Array([128, 128, 255, 255]), 1, 1, THREE.RGBAFormat);   // 사진이 오기 전 '평평함' 자리표시 (나중에 바꿔도 셰이더를 다시 안 만들어요)
+  flatNormal.needsUpdate = true;
+  function loadReal(file, cb) {
+    if (!texCache[file]) {
+      const e = texCache[file] = { tex: null, waits: [], failed: false };
+      texLoader.load(TEX_DIR + file, function (tex) {
+        e.tex = tex;
+        console.log("[📷 texture] 사진 불러옴 ->", file, "| 크기:", tex.image.width + "x" + tex.image.height, "| 쓰는 곳:", e.waits.length);
+        e.waits.forEach(function (f) { f(tex); }); e.waits = [];
+      }, undefined, function () { e.failed = true; console.log("[📷 texture] 못 불러옴 -> 그림 텍스처 그대로:", file); });
+    }
+    const e = texCache[file];
+    if (e.tex) cb(e.tex); else if (!e.failed) e.waits.push(cb);
+  }
+  function useReal(mat, slot, file, rx, ry, srgb, after) {   // mat[slot](map·normalMap)을 사진으로 바꿔요. rx, ry = 반복 횟수
+    loadReal(file, function (img) {
+      const t = img.clone();
+      t.needsUpdate = true;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(rx, ry);
+      t.encoding = srgb ? THREE.sRGBEncoding : THREE.LinearEncoding;
+      t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      mat[slot] = t;
+      mat.needsUpdate = true;
+      if (after) after(mat);
+    });
+  }
+  function realMat(hex, map, roughness) {   // 사진 + 울퉁불퉁(normal map)을 쓰는 재질. 빛을 픽셀마다 계산해서 불빛이 바닥에 자연스럽게 번져요
+    return new THREE.MeshStandardMaterial({ color: hex, map: map || null, normalMap: flatNormal, roughness: roughness, metalness: 0 });
+  }
+  function fadeEdge(mat, r) {   // 바닥 조각 가장자리를 부드럽게 흐려요 (r = 이 거리에서 완전히 투명)
+    mat.transparent = true; mat.depthWrite = false;
+    mat.onBeforeCompile = function (sh) {
+      sh.vertexShader = "varying vec2 vFadeP;\n" + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n vFadeP = position.xy;");
+      sh.fragmentShader = "varying vec2 vFadeP;\n" + sh.fragmentShader.replace("#include <alphamap_fragment>", "#include <alphamap_fragment>\n diffuseColor.a *= 1.0 - smoothstep(" + (r * 0.62).toFixed(2) + ", " + r.toFixed(2) + ", length(vFadeP));");
+    };
+    return mat;
+  }
   function speckle(g, w, h, seed, n, colors, rmin, rmax) {   // 이음매 없이 반복되게, 가장자리에 걸친 점은 반대편에도 찍어요
     const r = mulberry32(seed);
     for (let i = 0; i < n; i++) {
@@ -691,6 +731,7 @@
     const core = addMesh(blobGeometry(r, seed), map ? lambert(hex, { map: map }) : lambert(hex), x, 0.06, z);
     core.rotation.x = -Math.PI / 2; walkables.push(core);
     console.log("[🟤 ground] 구역 바닥 -> 중심:", x, z, "| 반지름:", r);
+    return core;
   }
   // 구불구불한 띠(길·개울): 점들을 곡선으로 잇고 양옆으로 폭을 줘요. 지나간 점 목록을 돌려줘요
   function ribbon(points, width, mat, y, clearR) {
@@ -811,6 +852,7 @@
     });
     const foliageMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
     const trunkMat = lambert(0xffffff, { map: barkTex });
+    useReal(trunkMat, "map", "bark_brown_01_diff_1k.jpg", 1, 2, true, function (m) { m.color.setHex(0x8a7f78); });   // 숲 나무는 많아서 사진만 (가볍게)
     const kinds = [coniferGeometry(101, 5.6, 2.0), coniferGeometry(202, 6.4, 1.8), coniferGeometry(303, 5.0, 2.2)];
     const trunkGeo = new THREE.CylinderGeometry(0.13, 0.26, 2.4, 8);
     trunkGeo.translate(0, 1.2, 0);
@@ -851,6 +893,7 @@
   for (let x = 198; x >= -200; x -= 2) groundShape.lineTo(x, -cliffZ(x));
   groundShape.lineTo(-200, -200);
   const ground = addMesh(new THREE.ShapeGeometry(groundShape), lambert(0xc3cce4, { map: snowTex }), 0, 0, 0);
+  useReal(ground.material, "map", "snow_01_diff_1k.jpg", 1 / 7, 1 / 7, true, function (m) { m.color.setHex(0xd2daf0); });   // 넓은 눈밭은 가볍게 사진만 (빛 계산은 그대로)
   ground.rotation.x = -Math.PI / 2;
   walkables.push(ground);
   zoneGround(P, 0xc9d2ec, 0, 0, 0.6);
@@ -1133,16 +1176,18 @@
     g.strokeStyle = "rgba(60,35,18,0.7)"; g.lineWidth = 2;
     [0.3, 2.1, 4.0].forEach(function (a) { g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * w * 0.4, cy + Math.sin(a) * w * 0.4); g.stroke(); });   // 마르며 생긴 금
   });
-  const logMats = [lambert(0xffffff, { map: barkLogTex }), lambert(0xffffff, { map: ringTex }), lambert(0xffffff, { map: ringTex })];
+  const logMats = [realMat(0xffffff, barkLogTex, 0.92), lambert(0xffffff, { map: ringTex }), lambert(0xffffff, { map: ringTex })];
+  useReal(logMats[0], "map", "bark_brown_01_diff_1k.jpg", 2, 2, true, function (m) { m.color.setHex(0xb0a49a); });
+  useReal(logMats[0], "normalMap", "bark_brown_01_nor_gl_1k.jpg", 2, 2, false);
   // 돔 텐트: 안에 랜턴이 켜져 있어서 천이 따뜻하게 빛나요. 문은 불 쪽으로
   function buildTent(x, z, rotY) {
-    const g = new THREE.Group(), W = 1.55, Hh = 1.25, Dp = 1.3;
+    const S = 2.4, g = new THREE.Group(), W = 1.55 * S, Hh = 1.25 * S, Dp = 1.3 * S;   // 눈사람(키 약 2.7)이 들어갈 만한 크기
     function paint(glow) {   // glow=false: 천 색 그림, glow=true: 안에서 비치는 빛 세기 그림
-      return makeCanvasTexture(512, 256, function (c, w, h) {
+      return makeCanvasTexture(1024, 512, function (c, w, h) {
         c.fillStyle = glow ? "#8a8a8a" : "#c8742f"; c.fillRect(0, 0, w, h);
-        if (!glow) speckle(c, w, h, 71, 120, ["rgba(0,0,0,0.05)", "rgba(255,255,255,0.05)"], 4, 18);
+        if (!glow) speckle(c, w, h, 71, 160, ["rgba(0,0,0,0.05)", "rgba(255,255,255,0.05)"], 6, 30);
         const band = glow ? "#000" : "#3b3a38"; c.fillStyle = band; c.fillRect(0, h * 0.86, w, h * 0.14);   // 아래쪽 바닥 천(회색)
-        [0.125, 0.375, 0.625, 0.875].forEach(function (u) { c.fillStyle = glow ? "#222" : "rgba(60,30,10,0.7)"; c.fillRect(u * w - 3, 0, 6, h); });   // 폴대 지나는 솔기
+        [0.125, 0.375, 0.625, 0.875].forEach(function (u) { c.fillStyle = glow ? "#222" : "rgba(60,30,10,0.7)"; c.fillRect(u * w - 4, 0, 8, h); });   // 폴대 지나는 솔기
         // 문(앞쪽 = 그림의 0.25 자리): 반쯤 열려서 안쪽 빛이 보여요
         const dx = 0.25 * w, dw = 0.085 * w;
         c.fillStyle = glow ? "#fff" : "#5a3214";
@@ -1168,26 +1213,39 @@
         const th = -Math.PI / 2 + Math.PI * k / 16, sx = Math.sin(th), cy = Math.cos(th);
         pts.push(new THREE.Vector3(Math.cos(pa) * sx * W * 1.015, cy * Hh * 1.015 + 0.02, Math.sin(pa) * sx * Dp * 1.015));
       }
-      addMesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 32, 0.022, 6), MAT.dark, 0, 0, 0, g);
+      addMesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, 0.045, 6), MAT.dark, 0, 0, 0, g);
     });
     const lineMat = new THREE.LineBasicMaterial({ color: 0xd8d2c4, transparent: true, opacity: 0.55 });
     [Math.PI / 4, 3 * Math.PI / 4, 5 * Math.PI / 4, 7 * Math.PI / 4].forEach(function (pa) {   // 줄과 팩
-      const a = new THREE.Vector3(Math.cos(pa) * W * 0.78, Hh * 0.62, Math.sin(pa) * Dp * 0.78), b = new THREE.Vector3(Math.cos(pa) * W * 1.75, 0.04, Math.sin(pa) * Dp * 1.75);
+      const a = new THREE.Vector3(Math.cos(pa) * W * 0.78, Hh * 0.62, Math.sin(pa) * Dp * 0.78), b = new THREE.Vector3(Math.cos(pa) * W * 1.4, 0.04, Math.sin(pa) * Dp * 1.4);
       g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), lineMat));
-      addMesh(new THREE.CylinderGeometry(0.02, 0.012, 0.22, 5), MAT.dark, b.x, 0.08, b.z, g);
+      addMesh(new THREE.CylinderGeometry(0.035, 0.02, 0.32, 5), MAT.dark, b.x, 0.12, b.z, g);
     });
-    const spill = addMesh(new THREE.CircleGeometry(1.6, 32), new THREE.MeshBasicMaterial({ map: radialTexture([[0, "rgba(255,170,90,0.45)"], [1, "rgba(255,140,60,0)"]]), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }), 0, 0.07, Dp + 0.5, g);
+    const spill = addMesh(new THREE.CircleGeometry(1.6 * S, 32), new THREE.MeshBasicMaterial({ map: radialTexture([[0, "rgba(255,170,90,0.45)"], [1, "rgba(255,140,60,0)"]]), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }), 0, 0.07, Dp + 0.5, g);
     spill.rotation.x = -Math.PI / 2; spill.scale.set(1, 0.6, 1);   // 문 앞 바닥에 번진 불빛
     const shadow = addMesh(new THREE.CircleGeometry(1, 32), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: 0.3, depthWrite: false }), 0, 0.065, 0, g);
     shadow.rotation.x = -Math.PI / 2; shadow.scale.set(W * 1.12, Dp * 1.12, 1);
     g.position.set(x, 0, z); g.rotation.y = rotY; scene.add(g);
-    colliders.push({ x: x, z: z, r: 1.7 });
+    colliders.push({ x: x, z: z, r: W * 0.95 });
+    clearings.push({ x: x, z: z, r: W + 1.6 });   // 텐트 자리엔 나무가 안 자라요
     camp.tentFabric = fabric;
-    console.log("[⛺ tent] 돔 텐트 -> 위치:", x.toFixed(1), z.toFixed(1), "| 문 방향:", rotY.toFixed(2));
+    console.log("[⛺ tent] 돔 텐트 -> 위치:", x.toFixed(1), z.toFixed(1), "| 문 방향:", rotY.toFixed(2), "| 너비·높이:", (W * 2).toFixed(1), Hh.toFixed(1));
   }
   const camp = { tentFabric: null };
   (function buildCamp() {
-    zoneGround(17, 0x9a9088, FIRE.x, FIRE.z, 1.3, dirtTex);
+    const campCore = zoneGround(17, 0x9a9088, FIRE.x, FIRE.z, 1.3, dirtTex);
+    campCore.material = realMat(0x9a9088, dirtTex, 0.97);   // 숲 흙 사진. 불빛이 바닥에 둥글게 번져요
+    useReal(campCore.material, "map", "forest_ground_06_diff_1k.jpg", 1 / 4, 1 / 4, true, function (m) { m.color.setHex(0xc4bab2); });
+    useReal(campCore.material, "normalMap", "forest_ground_06_nor_gl_1k.jpg", 1 / 4, 1 / 4, false);
+    [[FIRE.x, FIRE.z, 3.0, 0.075, 7.3], [FIRE.x + 3, cliffZ(FIRE.x + 3) + 4.4, 3.0, 0.075, 8.1]].forEach(function (q) {   // 돌이 박힌 바닥: 모닥불 둘레, 절벽 전망 벤치 앞
+      const m = fadeEdge(realMat(0x8f8a84, null, 0.95), q[2]);
+      const patch = addMesh(blobGeometry(q[2], q[4]), m, q[0], q[3], q[1]);
+      patch.rotation.x = -Math.PI / 2;
+      patch.visible = false;   // 사진이 오면 보여요 (그 전엔 그냥 흙)
+      patch.renderOrder = -1;  // 재·불빛보다 먼저 그려서 그 밑에 깔리게
+      useReal(m, "map", "rocks_ground_06_diff_1k.jpg", 1 / 3, 1 / 3, true, function () { patch.visible = true; });
+      useReal(m, "normalMap", "rocks_ground_06_nor_gl_1k.jpg", 1 / 3, 1 / 3, false);
+    });
     buildFire();
 
     // 통나무 의자 3개 (불 주위, 남쪽 입구는 비워둠)
@@ -1202,7 +1260,7 @@
       seats.push({ x: g.position.x, z: g.position.z, heading: a + Math.PI, y: 0.62, out: -1.9, kind: "fire" });   // 불멍 자리: 불을 바라보고 앉고, 일어날 땐 통나무 뒤로
     });
     // 텐트 (문은 불 쪽)
-    buildTent(FIRE.x - 8, FIRE.z - 5, Math.atan2(8, 5));
+    buildTent(FIRE.x - 10, FIRE.z - 3, Math.atan2(10, 3));   // 커진 만큼 불에서 조금 더 떨어뜨려요
     // 별 보기 매트 + 망원경
     const matTex = makeCanvasTexture(128, 256, function (g, w, h) {   // 접혔던 자국이 있는 캠핑 매트
       g.fillStyle = "#3d5a8a"; g.fillRect(0, 0, w, h);
@@ -2302,7 +2360,7 @@
     if (e.code === "KeyM" && !e.repeat) toggleZen();
     if (player.seat && player.seat.kind === "fire") {
       if (e.code === "KeyQ" && !e.repeat) mallowAction("Q 키");
-      if (e.code === "Space" && mallow.on) mallow.pushTarget = 1;
+      if (e.code === "Space" && mallow.on && mallow.inspect < 0) mallow.pushTarget = 1;
     }
     if (!e.repeat && /^Digit[1-5]$/.test(e.code)) sendEmoji(EMOJIS[Number(e.code.slice(5)) - 1], "키보드");
     if (!e.repeat && state.zone === "keys") {
@@ -2546,6 +2604,92 @@
     og.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
     osc.connect(og); og.connect(audio.master);
     osc.start(t); osc.stop(t + 0.13);
+  }
+  // ---- 🍡 먹는 소리·가루 소리 (전부 합성: 잡음 조각 + 짧은 음) ----
+  function nb(t0, dur, type, f0, f1, q, vol, atk) {   // 잡음 한 토막: 필터를 f0 -> f1 로 움직이며
+    const ctx = audio.ctx, src = ctx.createBufferSource(); src.buffer = audio.white;
+    const bf = ctx.createBiquadFilter(); bf.type = type; bf.Q.value = q;
+    bf.frequency.setValueAtTime(f0, t0);
+    if (f1 && f1 !== f0) bf.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+    const g = ctx.createGain(), a = atk || Math.min(0.01, dur * 0.3);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol), t0 + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(bf); bf.connect(g); g.connect(audio.master);
+    src.start(t0, Math.random() * 1.7, dur + 0.03);
+  }
+  function tone(t0, dur, type, f0, f1, vol, atk) {   // 짧은 음 하나: 높이를 f0 -> f1 로
+    const ctx = audio.ctx, osc = ctx.createOscillator(); osc.type = type;
+    osc.frequency.setValueAtTime(f0, t0);
+    osc.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol), t0 + (atk || 0.01));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g); g.connect(audio.master);
+    osc.start(t0); osc.stop(t0 + dur + 0.02);
+  }
+  function chewAt(t0, k) {   // 쫀득: 입을 다물며 '꾹' + 말랑하게 눌리는 '쭈' + 끈적하게 떨어지는 '쩝'
+    tone(t0, 0.13, "sine", 125, 70, 0.16 * k, 0.012);
+    nb(t0 + 0.01, 0.2, "bandpass", 650, 260, 3.5, 0.22 * k, 0.03);
+    nb(t0 + 0.17, 0.035, "bandpass", 1900, 1500, 2.5, 0.09 * k);
+  }
+  function crunchAt(t0, k, lo, hi, grains, spread) {   // 바삭: 아주 짧은 '탁' 수십 개가 한꺼번에 (앞쪽에 몰리게)
+    for (let i = 0; i < grains; i++) {
+      const d = Math.pow(Math.random(), 1.6) * spread;
+      nb(t0 + d, 0.004 + Math.random() * 0.012, "bandpass", lo + Math.random() * (hi - lo), 0, 1.4, k * (0.08 + Math.random() * 0.28) * (1 - 0.6 * d / spread), 0.001);
+    }
+  }
+  function groanAt(t0) {   // 앓는 소리 '으으…': 톱니파 목소리를 'ㅡ' 모음 울림(포먼트) 세 개로 걸러요. 두 번째 '으'는 길게 내려가요
+    const ctx = audio.ctx, osc = ctx.createOscillator(), f = osc.frequency;
+    osc.type = "sawtooth";
+    f.setValueAtTime(250, t0); f.linearRampToValueAtTime(232, t0 + 0.42); f.linearRampToValueAtTime(205, t0 + 0.55);
+    f.linearRampToValueAtTime(240, t0 + 0.68); f.linearRampToValueAtTime(175, t0 + 1.45);
+    const vib = ctx.createOscillator(), vg = ctx.createGain();
+    vib.frequency.value = 5.2; vg.gain.value = 5; vib.connect(vg); vg.connect(f);
+    const env = ctx.createGain(), e = env.gain;
+    e.setValueAtTime(0.0001, t0); e.exponentialRampToValueAtTime(0.5, t0 + 0.06); e.linearRampToValueAtTime(0.42, t0 + 0.42);
+    e.exponentialRampToValueAtTime(0.06, t0 + 0.56); e.exponentialRampToValueAtTime(0.5, t0 + 0.68);
+    e.linearRampToValueAtTime(0.32, t0 + 1.1); e.exponentialRampToValueAtTime(0.0001, t0 + 1.55);
+    osc.connect(env);
+    [[380, 2.2, 1.0], [1400, 6, 0.4], [2550, 8, 0.2]].forEach(function (fm) {
+      const bp = filter(ctx, "bandpass", fm[0]), g = ctx.createGain();
+      bp.Q.value = fm[1]; g.gain.value = fm[2] * 0.55;
+      env.connect(bp); bp.connect(g); g.connect(audio.master);
+    });
+    nb(t0, 1.5, "bandpass", 1400, 1100, 0.8, 0.02, 0.1);   // 숨소리 조금
+    osc.start(t0); vib.start(t0); osc.stop(t0 + 1.6); vib.stop(t0 + 1.6);
+  }
+  function playEat(kind) {
+    if (!audio || !audio.on) { console.log("[🔊 eat] 소리 꺼짐 -> 안 남:", kind); return; }
+    const t = audio.ctx.currentTime + 0.02;
+    if (kind === "chew") {          // 쫀득쫀득 네 번
+      [0, 0.36, 0.72, 1.06].forEach(function (d, i) { chewAt(t + d, 1 - i * 0.15); });
+    } else if (kind === "crisp") {  // 겉은 바삭, 속은 쫀득
+      crunchAt(t, 1, 2400, 6500, 34, 0.12); chewAt(t + 0.14, 0.6);
+      crunchAt(t + 0.42, 0.55, 2400, 6000, 14, 0.08); chewAt(t + 0.5, 0.75); chewAt(t + 0.86, 0.6);
+    } else if (kind === "crunch") { // 캐러멜 껍질이 더 두껍고 단단하게 와삭
+      crunchAt(t, 1.15, 1600, 5200, 44, 0.15); crunchAt(t + 0.4, 0.8, 1600, 5000, 26, 0.12); chewAt(t + 0.55, 0.55);
+      crunchAt(t + 0.8, 0.5, 1800, 5000, 12, 0.08); chewAt(t + 0.9, 0.5);
+    } else {                        // 탄 것: 숯이 '푸석' 부서지고 -> '으으…'
+      crunchAt(t, 1.1, 900, 3000, 40, 0.16);
+      nb(t + 0.02, 0.22, "lowpass", 900, 300, 0.7, 0.12, 0.02);
+      groanAt(t + 0.55);
+    }
+    console.log("[🔊 eat] 먹는 소리 ->", kind);
+  }
+  function playSprinkle() {   // 가루 뿌리는 '사락' + 톡톡 두 번
+    if (!audio || !audio.on) return;
+    const t = audio.ctx.currentTime;
+    nb(t, 0.28, "highpass", 4200, 0, 0.7, 0.07, 0.02);
+    nb(t + 0.3, 0.08, "highpass", 4800, 0, 0.7, 0.035);
+    nb(t + 0.48, 0.08, "highpass", 4800, 0, 0.7, 0.03);
+  }
+  function playFlare() {   // 가루가 불에 닿아 '화르륵' + 타닥타닥
+    if (!audio || !audio.on) return;
+    const t = audio.ctx.currentTime;
+    nb(t, 0.7, "bandpass", 500, 1600, 0.8, 0.22, 0.08);
+    for (let i = 0; i < 9; i++) nb(t + Math.random() * 0.5, 0.01 + Math.random() * 0.03, "highpass", 1500 + Math.random() * 2500, 0, 0.7, 0.1 + Math.random() * 0.2, 0.002);
   }
   function playChime(freq, vol) {   // 풍경: 맑은 소리 하나 + 높은 배음 둘이 길게 사라져요
     if (!audio || !audio.on) return;
@@ -3338,22 +3482,145 @@
     }
   }
 
+  // ---- 🤍 1인칭 솜 손 (불멍 자리에서만 보여요): 오른손은 마시멜로 꼬챙이, 왼손은 원소 가루 ----
+  const _up = new THREE.Vector3(0, 1, 0);
+  function sstep(a, b, x) { const k = clamp((x - a) / (b - a), 0, 1); return k * k * (3 - 2 * k); }
+  const handMat = lambert(0xfdfdff, { emissive: 0x2c2724 });   // 내 쪽(불 반대쪽)도 너무 깜깜하지 않게 따뜻한 회색빛
+  function buildHand(seed) {   // 눈사람 팔처럼 길쭉한 솜뭉치. 그룹의 (0,0,0)이 손끝 근처(잡는 자리)
+    const g = new THREE.Group(), geo = puffyGeometry(0.085, 0.05, seed);
+    addMesh(geo, handMat, 0, -0.1, 0, g).scale.set(1, 1.4, 0.95);
+    addMesh(geo.clone(), fuzzMat, 0, -0.1, 0, g).scale.set(1.06, 1.48, 1.01);
+    g.visible = false;
+    scene.add(g);
+    return g;
+  }
+  const hands = { R: buildHand(2.3), L: buildHand(5.7) };
+  const camF = new THREE.Vector3(), camR = new THREE.Vector3(), camU = new THREE.Vector3(), _hq = new THREE.Vector3();
+  function updateCamBasis() {   // 카메라 앞·오른쪽·위 방향 (1인칭 손 자리를 화면 기준으로 정해요)
+    camera.getWorldDirection(camF);
+    camR.crossVectors(camF, _up).normalize();
+    camU.crossVectors(camR, camF).normalize();
+  }
+  function camPoint(out, f, r, u) { return out.copy(camera.position).addScaledVector(camF, f).addScaledVector(camR, r).addScaledVector(camU, u); }
+  function camDir(out, f, r, u) { return out.set(0, 0, 0).addScaledVector(camF, f).addScaledVector(camR, r).addScaledVector(camU, u).normalize(); }
+  function halfTan() { return Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)); }
+  function sideRoom(f) { return f * halfTan() * camera.aspect; }   // 거리 f에서 화면 가로 반폭 (폰처럼 좁으면 손을 안쪽으로)
+  function placeHand(h, pos, dir) { h.position.copy(pos); h.quaternion.setFromUnitVectors(_up, dir); }
+
   // ---- 🍡 마시멜로 굽기 (불멍 자리에서만, 나만 보여요) ----
+  // sound: 먹을 때 소리 (chew 쫀득 / crisp 바삭 / crunch 더 바삭 / burnt 숯 + 앓는 소리)
   const MALLOW_STAGES = [
-    { max: 0.22, name: "아직 하얘요. 천천히 돌려가며 구워요", taste: "말랑하고 차가운 마시멜로 맛이에요" },
-    { max: 0.5, name: "노릇노릇 익는 중…", taste: "살짝 따뜻하고 쫀득해요" },
-    { max: 0.8, name: "황금빛! 지금 먹으면 딱 좋아요 ✨", taste: "겉은 바삭, 속은 사르르 녹아요. 완벽해요!" },
-    { max: 1.05, name: "갈색으로 그을렸어요", taste: "캐러멜처럼 쌉싸름하고 고소해요" },
-    { max: 99, name: "까맣게 탔어요…", taste: "숯 맛이 나요. 그래도 이게 캠핑이죠" }
+    { max: 0.22, name: "아직 하얘요. 천천히 돌려가며 구워요", look: "하얗고 말랑해요. 거의 안 익었어요", taste: "말랑하고 차가운 마시멜로 맛이에요", sound: "chew", face: "😋" },
+    { max: 0.5, name: "말랑말랑 따뜻해지는 중…", look: "살짝 부풀고 군데군데 노르스름해요", taste: "따뜻하고 쫀득쫀득해요", sound: "chew", face: "😋" },
+    { max: 0.8, name: "노릇노릇 황금빛! 지금 먹으면 딱 좋아요 ✨", look: "겉이 황금빛으로 바삭하게 구워졌어요", taste: "겉은 바삭, 속은 사르르 녹아요. 완벽해요!", sound: "crisp", face: "😋" },
+    { max: 1.05, name: "갈색으로 그을렸어요", look: "갈색으로 그을려서 캐러멜처럼 반질반질해요", taste: "캐러멜처럼 쌉싸름하고 와삭와삭해요", sound: "crunch", face: "😋" },
+    { max: 99, name: "까맣게 탔어요…", look: "겉이 숯처럼 까맣게 탔어요. 갈라진 틈으로 속이 보여요", taste: "으으… 숯 맛이에요. 그래도 이게 캠핑이죠", sound: "burnt", face: "😖" }
   ];
-  const MALLOW_COLORS = [[0, 0.98, 0.97, 0.93], [0.35, 0.97, 0.85, 0.58], [0.65, 0.84, 0.56, 0.26], [0.95, 0.45, 0.27, 0.13], [1.3, 0.07, 0.05, 0.04]];
-  const mallow = { on: false, cook: 0, burning: 0, push: 0, pushTarget: 0, stage: -1, eaten: 0, spin: 0 };
+  const INSPECT = { IN: 0.7, BITE: 2.9, END: 3.25 };   // 먹기 전에 눈앞으로 가져와(0.7초) 보고(2.2초) 냠(0.35초)
+  const mallow = { on: false, cook: 0, burning: 0, push: 0, pushTarget: 0, stage: -1, eaten: 0, spin: 0, inspect: -1, bit: false, u: { cook: { value: 0 }, burn: { value: 0 } } };
+  // 마시멜로 겉면 무늬용 3D 잡음 (점마다 굽는 정도를 얼룩덜룩하게)
+  const ML_NOISE = `
+    float mlH(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+    float mlN(vec3 x) {
+      vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(mix(mlH(i), mlH(i + vec3(1.0, 0.0, 0.0)), f.x), mix(mlH(i + vec3(0.0, 1.0, 0.0)), mlH(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+                 mix(mix(mlH(i + vec3(0.0, 0.0, 1.0)), mlH(i + vec3(1.0, 0.0, 1.0)), f.x), mix(mlH(i + vec3(0.0, 1.0, 1.0)), mlH(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z);
+    }
+    float mlF(vec3 p) { return 0.5 * mlN(p) + 0.25 * mlN(p * 2.03 + 1.7) + 0.125 * mlN(p * 4.01 + 3.1) + 0.0625 * mlN(p * 7.97 + 5.3); }
+  `;
+  function mallowGeometry() {   // 진짜 마시멜로처럼: 모서리가 둥근 원기둥, 살짝 삐뚤빼뚤
+    const R = 0.14, H = 0.13, E = 0.05, prof = [[0, -H], [0.035, -H], [0.07, -H]];
+    for (let i = 0; i <= 6; i++) { const q = -Math.PI / 2 + i / 6 * Math.PI / 2; prof.push([R - E + Math.cos(q) * E, -H + E + Math.sin(q) * E]); }
+    prof.push([R * 1.006, -0.04], [R * 1.012, 0], [R * 1.006, 0.04]);
+    for (let i = 0; i <= 6; i++) { const q = i / 6 * Math.PI / 2; prof.push([R - E + Math.cos(q) * E, H - E + Math.sin(q) * E]); }
+    prof.push([0.07, H], [0.035, H], [0, H]);
+    const geo = new THREE.LatheGeometry(prof.map(function (q) { return new THREE.Vector2(q[0], q[1]); }), 44);
+    const pos = geo.attributes.position, v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      const ph = Math.atan2(v.z, v.x), k = 1 + 0.035 * Math.sin(ph * 3 + 1.3) + 0.02 * Math.sin(ph * 5 + 0.4) + 0.02 * Math.sin(v.y * 22 + ph * 2);
+      pos.setXYZ(i, v.x * k, v.y * (1 + 0.04 * Math.sin(ph * 2 + 0.7)), v.z * k);
+    }
+    geo.computeVertexNormals();
+    smoothByPosition(geo);
+    // 점마다 '잘 타는 정도': 모서리, 불 쪽 끝(+y), 그리고 무작위 얼룩이 먼저 노릇해져요
+    const nor = geo.attributes.normal, sus = [];
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      const ny = Math.abs(nor.getY(i)), edge = sstep(0.25, 0.6, ny) * (1 - sstep(0.85, 0.99, ny));
+      const tip = v.y > 0 ? Math.min(1, v.y / H) : 0;
+      const n = Math.sin(v.x * 41 + 1.1) * Math.sin(v.y * 37 + 2.3) * Math.sin(v.z * 43 + 0.7);
+      sus.push(clamp(0.32 + 0.3 * edge + 0.28 * tip + 0.22 * n, 0, 1));
+    }
+    geo.setAttribute("aSus", new THREE.Float32BufferAttribute(sus, 1));
+    return geo;
+  }
+  function mallowMaterial() {   // 굽는 정도(uMlCook)에 따라 하양 -> 크림 -> 황금 -> 갈색 -> 숯. 물집, 숯 주름, 갈라진 틈까지
+    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 });
+    m.onBeforeCompile = function (sh) {
+      sh.uniforms.uMlCook = mallow.u.cook; sh.uniforms.uMlBurn = mallow.u.burn;
+      sh.vertexShader = "attribute float aSus;\nuniform float uMlCook;\nvarying float vMlCook;\nvarying vec3 vMlPos;\n" + ML_NOISE +
+        sh.vertexShader.replace("#include <begin_vertex>", `
+          vec3 transformed = vec3(position);
+          vMlPos = position;
+          vMlCook = uMlCook * (0.72 + 0.56 * aSus) + max(uMlCook - 0.98, 0.0) * 1.8;   // 많이 익으면 골고루 까매져요
+          float mlChar = smoothstep(1.0, 1.25, vMlCook);
+          transformed += objectNormal * ((mlF(position * 18.0) - 0.47) * 0.016 - 0.006) * mlChar;   // 탄 겉은 쪼그라들고 울퉁불퉁`);
+      sh.fragmentShader = "uniform float uMlBurn;\nvarying float vMlCook;\nvarying vec3 vMlPos;\nfloat mlL; float mlCh; float mlCr; float mlHt; float mlBc;\n" + ML_NOISE + `
+        vec3 mlRamp(float L) {
+          vec3 c = mix(vec3(0.97, 0.96, 0.93), vec3(0.97, 0.90, 0.74), smoothstep(0.05, 0.3, L));   // 하양 -> 크림
+          c = mix(c, vec3(0.92, 0.70, 0.38), smoothstep(0.28, 0.5, L));    // 연한 황금
+          c = mix(c, vec3(0.80, 0.50, 0.20), smoothstep(0.48, 0.7, L));    // 황금 갈색
+          c = mix(c, vec3(0.55, 0.30, 0.11), smoothstep(0.68, 0.88, L));   // 갈색
+          c = mix(c, vec3(0.30, 0.15, 0.06), smoothstep(0.86, 1.0, L));    // 짙은 갈색
+          c = mix(c, vec3(0.07, 0.05, 0.04), smoothstep(0.98, 1.15, L));   // 숯
+          return c;
+        }
+        vec3 mlPerturb(vec3 sp, vec3 sn, vec2 dH, float fd) {   // 겉면 높낮이(mlHt)로 빛 방향을 살짝 비틀어 물집·주름을 보여요
+          vec3 sx = vec3(dFdx(sp.x), dFdx(sp.y), dFdx(sp.z)), sy = vec3(dFdy(sp.x), dFdy(sp.y), dFdy(sp.z));
+          vec3 r1 = cross(sy, sn), r2 = cross(sn, sx);
+          float det = dot(sx, r1) * fd;
+          vec3 g = sign(det) * (dH.x * r1 + dH.y * r2);
+          return normalize(abs(det) * sn - g);
+        }
+      ` + sh.fragmentShader
+        .replace("#include <color_fragment>", `#include <color_fragment>
+          {
+            vec3 mp = vMlPos * 20.0;
+            float n1 = mlF(mp), n2 = mlN(mp * 4.3 + 7.0);
+            float L = vMlCook + (n1 - 0.47) * 0.6 * smoothstep(0.03, 0.4, vMlCook) + (n2 - 0.5) * 0.1 * smoothstep(0.15, 0.6, vMlCook);
+            mlL = max(L, 0.0);
+            mlCh = smoothstep(1.0, 1.16, mlL);
+            float cl = abs(mlN(vMlPos * 26.0 + 3.0) - 0.5) + (mlN(vMlPos * 90.0) - 0.5) * 0.05;   // 들쭉날쭉한 금
+            float crMask = smoothstep(0.56, 0.72, mlN(vMlPos * 9.0 + 9.0)) * mlCh;                // 숯 겉이 군데군데만 갈라져요
+            mlCr = (1.0 - smoothstep(0.0, 0.032, cl)) * crMask;
+            float crRim = (1.0 - smoothstep(0.0, 0.1, cl)) * crMask;
+            float bl = smoothstep(0.55, 0.9, mlN(vMlPos * 46.0));                                 // 노릇할 때 생기는 물집
+            mlBc = smoothstep(0.4, 0.8, mlN(vMlPos * 24.0 + 5.0));                                // 탄 겉의 거품 같은 물집
+            mlHt = 0.0025 * bl * smoothstep(0.3, 0.75, mlL) * (1.0 - mlCh) + (0.01 * mlBc + 0.004 * n1 + 0.002 * n2) * mlCh - 0.005 * crRim + 0.0005 * n2;
+            vec3 c = mlRamp(mlL);
+            c = mix(c, vec3(0.3, 0.28, 0.27), smoothstep(0.58, 0.8, n1) * 0.4 * mlCh);           // 회색 재
+            c = mix(c, vec3(0.42, 0.22, 0.08), crRim);                                            // 틈 가장자리: 그을린 캐러멜
+            c = mix(c, vec3(0.93, 0.8, 0.55), mlCr);                                              // 틈으로 보이는 하얗게 녹은 속
+            diffuseColor.rgb = pow(c, vec3(2.2));
+          }`)
+        .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
+          roughnessFactor = mix(mix(0.9, 0.42, smoothstep(0.3, 0.85, mlL)), mix(0.95, 0.62, mlBc), mlCh);   // 날것은 가루처럼 보송, 구우면 캐러멜처럼 반질, 숯은 거칠게
+          roughnessFactor = mix(roughnessFactor, 0.35, mlCr);`)
+        .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+          normal = mlPerturb(-vViewPosition, normal, vec2(dFdx(mlHt), dFdy(mlHt)), faceDirection);`)
+        .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+          totalEmissiveRadiance *= 1.0 - 0.85 * mlCh;
+          totalEmissiveRadiance += vec3(1.0, 0.32, 0.05) * mlCr * uMlBurn * 2.0;   // 불붙으면 틈이 숯불처럼 빨갛게`);
+      console.log("[🍡 mallow] 겉면 셰이더 준비 -> 단계별 색·물집·숯 주름·틈");
+    };
+    return m;
+  }
   (function buildMallow() {
     mallow.group = new THREE.Group();
-    mallow.stick = addMesh(new THREE.CylinderGeometry(0.016, 0.022, 1, 6), lambert(0x8a6a48), 0, 0, 0, mallow.group);
-    const prof = [[0, -0.13], [0.1, -0.13], [0.135, -0.11], [0.145, 0], [0.135, 0.11], [0.1, 0.13], [0, 0.13]].map(function (q) { return new THREE.Vector2(q[0], q[1]); });
-    mallow.mat = lambert(0xfaf7ee, { emissive: 0x000000 });
-    mallow.puff = addMesh(new THREE.LatheGeometry(prof, 20), mallow.mat, 0, 0, 0, mallow.group);
+    mallow.stick = addMesh(new THREE.CylinderGeometry(0.014, 0.02, 1, 7), lambert(0x7a5c3e), 0, 0, 0, mallow.group);
+    mallow.mat = mallowMaterial();
+    mallow.puff = addMesh(mallowGeometry(), mallow.mat, 0, 0, 0, mallow.group);
     const fu = { uTime: { value: 0 }, uSeed: { value: 9.1 }, uSpeed: { value: 1.6 }, uGain: { value: 0.9 }, uTint: { value: new THREE.Color(1, 0.5, 0.1) }, uTintAmt: { value: 0 } };
     const fg = new THREE.PlaneGeometry(0.42, 0.62); fg.translate(0, 0.31, 0);
     mallow.flame = addMesh(fg, new THREE.ShaderMaterial({ uniforms: fu, vertexShader: FLAME_VERT, fragmentShader: FLAME_FRAG, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), 0, 0, 0);
@@ -3361,95 +3628,284 @@
     mallow.flame.visible = false;
     mallow.group.visible = false;
     scene.add(mallow.group);
+    mallow.fill = new THREE.PointLight(0xffd8b8, 0, 2.2, 2);   // 가까이 볼 때 내 쪽을 살짝 비추는 빛 (처음부터 넣어둬야 조명 수가 안 바뀌어 화면이 안 멈춰요)
+    scene.add(mallow.fill);
   })();
-  const _mA = new THREE.Vector3(), _mB = new THREE.Vector3(), _mD = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+  const _mA = new THREE.Vector3(), _mB = new THREE.Vector3(), _mD = new THREE.Vector3(), _mC = new THREE.Vector3(), _mE = new THREE.Vector3(), _mS = new THREE.Vector3(), _mT = new THREE.Vector3(), _mH = new THREE.Vector3();
   function mallowStage(c) { for (let i = 0; i < MALLOW_STAGES.length; i++) if (c < MALLOW_STAGES[i].max) return i; return MALLOW_STAGES.length - 1; }
-  function mallowAction(why) {   // Q / 버튼: 꽂기 -> 먹기, 불붙으면 후~ 불어 끄기
+  function mallowAction(why) {   // Q / 버튼: 꽂기 -> 먹기(눈앞으로 가져와 보고 냠), 불붙으면 후~ 불어 끄기
     if (!player.seat || player.seat.kind !== "fire") return;
     if (!mallow.on) {
-      mallow.on = true; mallow.cook = 0; mallow.burning = 0; mallow.stage = -1;
+      mallow.on = true; mallow.cook = 0; mallow.burning = 0; mallow.stage = -1; mallow.inspect = -1; mallow.bit = false; mallow.spin = Math.random() * 6.28;
       note("🍡 마시멜로를 꽂았어요. 불 가장자리에서 천천히 구워져요", 4000);
       console.log("[🍡 mallow] 꽂음 -> 이유:", why);
     } else if (mallow.burning > 0) {
       mallow.burning = 0; mallow.cook = Math.max(mallow.cook, 1.1);
       note("💨 후~ 불을 껐어요. 겉이 까맣게 됐어요", 3500);
       console.log("[🍡 mallow] 불 끔 -> 익은 정도:", mallow.cook.toFixed(2));
-    } else {
+    } else if (mallow.inspect < 0) {
       const st = MALLOW_STAGES[mallowStage(mallow.cook)];
-      mallow.eaten++;
-      note("😋 " + st.taste + " (오늘 " + mallow.eaten + "개째)", 5000);
-      console.log("[🍡 mallow] 먹음 -> 익은 정도:", mallow.cook.toFixed(2), "| 단계:", st.name, "| 지금까지:", mallow.eaten);
-      mallow.on = false;
+      mallow.inspect = 0; mallow.bit = false; mallow.pushTarget = 0;
+      note("🔍 " + st.look, 3200);
+      console.log("[🍡 mallow] 가까이 보기 -> 익은 정도:", mallow.cook.toFixed(2), "| 모습:", st.look, "| 이유:", why);
+    } else if (mallow.inspect < INSPECT.BITE) {
+      mallow.inspect = Math.max(mallow.inspect, INSPECT.BITE);   // 보는 중에 한 번 더 누르면 바로 냠
+      console.log("[🍡 mallow] 보다가 바로 먹기 -> 이유:", why);
     }
     refreshFireTools();
   }
-  function mallowOff() { mallow.on = false; mallow.burning = 0; mallow.pushTarget = 0; refreshFireTools(); }
-  function updateMallow(dt, t) {
-    const seat = player.seat;
-    mallow.group.visible = mallow.on && !!seat && seat.kind === "fire";
-    mallow.flame.visible = mallow.group.visible && mallow.burning > 0;
-    if (!mallow.group.visible) return;
+  function eatMallow() {
+    const st = MALLOW_STAGES[mallowStage(mallow.cook)];
+    mallow.eaten++;
+    playEat(st.sound);
+    note(st.face + " " + st.taste + " (오늘 " + mallow.eaten + "개째)", 5000);
+    console.log("[🍡 mallow] 먹음 -> 익은 정도:", mallow.cook.toFixed(2), "| 단계:", st.name, "| 소리:", st.sound, "| 지금까지:", mallow.eaten);
+  }
+  function mallowOff() { mallow.on = false; mallow.burning = 0; mallow.pushTarget = 0; mallow.inspect = -1; refreshFireTools(); }
+  function updateMallow(dt, t) {   // updateCamera 다음에 불러요 (손이 화면 기준이라서)
+    const seat = player.seat, show = mallow.on && state.mode === "play" && !!seat && seat.kind === "fire";
+    mallow.group.visible = show; hands.R.visible = show;
+    mallow.flame.visible = show && mallow.burning > 0;
+    if (!show) { mallow.fill.intensity = 0; return; }
     mallow.push += (mallow.pushTarget - mallow.push) * Math.min(1, dt * 4);
-    // 손(화면 오른쪽 아래)에서 불 가장자리까지 꼬챙이
+    // 굽는 자세: 솜 손은 화면 오른쪽 아래, 꼬챙이 끝은 불 가장자리 (밀면 불 속으로)
     const dx = FIRE.x - seat.x, dz = FIRE.z - seat.z, dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl, rx = -uz, rz = ux;
     const reach = 1.05 - 0.55 * mallow.push, sway = Math.sin(t * 1.3) * 0.03;
     _mB.set(FIRE.x - ux * reach + rx * (0.14 + sway), 0.8 - 0.14 * mallow.push + Math.sin(t * 0.9) * 0.02, FIRE.z - uz * reach + rz * (0.14 + sway));   // 꼬챙이 끝
-    _mA.set(seat.x + ux * 0.35 + rx * 0.62, 0.95, seat.z + uz * 0.35 + rz * 0.62);                                                      // 손
+    camPoint(_mA, 0.72 + 0.06 * mallow.push, Math.min(0.34, sideRoom(0.72) * 0.72), -0.285 + 0.04 * mallow.push);           // 손
+    let e = 0, bite = 0;
+    if (mallow.inspect >= 0) {
+      mallow.inspect += dt;
+      e = sstep(0, INSPECT.IN, mallow.inspect);
+      bite = sstep(INSPECT.BITE, INSPECT.END, mallow.inspect);
+      if (mallow.inspect >= INSPECT.BITE && !mallow.bit) { mallow.bit = true; eatMallow(); }
+      if (mallow.inspect >= INSPECT.END) {
+        mallow.on = false; mallow.inspect = -1;
+        mallow.group.visible = false; hands.R.visible = false; mallow.flame.visible = false; mallow.fill.intensity = 0;
+        refreshFireTools();
+        return;
+      }
+      // 가까이 보기: 마시멜로를 화면 가운데로. 꼬챙이는 오른쪽 아래에서 왼쪽 위로 비스듬히 (폰처럼 좁은 화면은 조금 멀리)
+      const d = Math.max(0.6, 0.24 / (halfTan() * camera.aspect));
+      camDir(_mD, 0.3, -0.62, 0.72);
+      camPoint(_mC, d, 0, -0.035 * d / 0.6);
+      if (bite > 0) { camPoint(_mE, 0.3, 0, -0.17); _mC.lerp(_mE, bite); }   // 냠: 입(화면 아래 가운데)으로
+      _mT.copy(_mC).addScaledVector(_mD, 0.16);
+      _mH.copy(_mC).addScaledVector(_mD, -0.5);
+      _mB.lerp(_mT, e); _mA.lerp(_mH, e);
+    }
     _mD.subVectors(_mB, _mA);
     const L = _mD.length(); _mD.normalize();
-    mallow.stick.position.copy(_mA).addScaledVector(_mD, L / 2);
+    _mS.copy(_mA).addScaledVector(_mD, -0.3);   // 꼬챙이 손잡이는 손 뒤로 조금 더 나와요
+    mallow.stick.position.copy(_mS).addScaledVector(_mD, (L + 0.3) / 2);
     mallow.stick.quaternion.setFromUnitVectors(_up, _mD);
-    mallow.stick.scale.set(1, L, 1);
-    mallow.spin += dt * 1.6;   // 골고루 익게 살살 돌려요
+    mallow.stick.scale.set(1, L + 0.3, 1);
+    placeHand(hands.R, _mA, camDir(_hq, 0.5 + 0.25 * e, -0.35, 0.8));
+    mallow.spin += dt * (mallow.inspect >= 0 ? 0.7 : 1.6);   // 골고루 익게 살살 돌려요 (볼 땐 천천히)
     mallow.puff.position.copy(_mB).addScaledVector(_mD, -0.16);
     mallow.puff.quaternion.setFromUnitVectors(_up, _mD);
     mallow.puff.rotateY(mallow.spin);
-    // 익히기: 가장자리는 천천히, 불 속은 빨리. 불 속에서 너무 익으면 불이 붙어요
-    if (mallow.burning > 0) {
-      mallow.burning += dt; mallow.cook += dt * 0.22;
-      if (mallow.burning > 4.5) { mallow.burning = 0; mallow.cook = Math.max(mallow.cook, 1.3); note("불이 저절로 꺼졌어요. 숯이 됐네요", 3500); refreshFireTools(); }
-    } else {
-      mallow.cook += dt * (0.045 + 0.16 * mallow.push);
-      if (mallow.push > 0.6 && mallow.cook > 0.88 && Math.random() < dt * 0.9) {
-        mallow.burning = 0.001;
-        note("🔥 앗, 불붙었다! 후~ 불어서 꺼요 (Q)", 4000);
-        console.log("[🍡 mallow] 불붙음! -> 익은 정도:", mallow.cook.toFixed(2));
-        refreshFireTools();
+    mallow.puff.scale.setScalar((1 + 0.2 * sstep(0.12, 0.75, mallow.cook) - 0.06 * sstep(1.0, 1.3, mallow.cook)) * (1 - 0.65 * bite));   // 구우면 부풀고, 타면 살짝 쪼그라들어요
+    // 익히기: 가장자리는 천천히, 불 속은 빨리. 불 속에서 너무 익으면 불이 붙어요 (보는 중엔 멈춤)
+    if (mallow.inspect < 0) {
+      if (mallow.burning > 0) {
+        mallow.burning += dt; mallow.cook += dt * 0.22;
+        if (mallow.burning > 4.5) { mallow.burning = 0; mallow.cook = Math.max(mallow.cook, 1.3); note("불이 저절로 꺼졌어요. 숯이 됐네요", 3500); refreshFireTools(); }
+      } else {
+        mallow.cook += dt * (0.045 + 0.16 * mallow.push);
+        if (mallow.push > 0.6 && mallow.cook > 0.88 && Math.random() < dt * 0.9) {
+          mallow.burning = 0.001;
+          note("🔥 앗, 불붙었다! 후~ 불어서 꺼요 (Q)", 4000);
+          console.log("[🍡 mallow] 불붙음! -> 익은 정도:", mallow.cook.toFixed(2));
+          refreshFireTools();
+        }
       }
+      const sg = mallowStage(mallow.cook);
+      if (sg !== mallow.stage && mallow.burning === 0) { mallow.stage = sg; if (mallow.cook > 0.05) note("🍡 " + MALLOW_STAGES[sg].name, 3000); }
     }
-    // 색: 하양 -> 노랑 -> 황금빛 갈색 -> 갈색 -> 까망
-    const c = Math.min(mallow.cook, 1.3);
-    let k = 0; while (k < MALLOW_COLORS.length - 2 && c > MALLOW_COLORS[k + 1][0]) k++;
-    const a = MALLOW_COLORS[k], b = MALLOW_COLORS[k + 1], f = clamp((c - a[0]) / (b[0] - a[0]), 0, 1);
-    mallow.mat.color.setRGB(a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, a[3] + (b[3] - a[3]) * f);
-    mallow.mat.emissive.setRGB(0.22 * (1 - mallow.push * 0.3) + mallow.burning * 0.4, 0.08 + mallow.burning * 0.12, 0.02);   // 불빛을 받아 따뜻하게
-    const sg = mallowStage(mallow.cook);
-    if (sg !== mallow.stage && mallow.burning === 0) { mallow.stage = sg; if (mallow.cook > 0.05) note("🍡 " + MALLOW_STAGES[sg].name, 3000); }
+    mallow.u.cook.value = mallow.cook;
+    mallow.u.burn.value += ((mallow.burning > 0 ? 1 : 0) - mallow.u.burn.value) * Math.min(1, dt * 3);
+    const nearFire = 1 - e;   // 불 옆에선 불빛을 받아 따뜻하게, 가까이 볼 땐 대신 내 쪽 빛으로
+    mallow.mat.emissive.setRGB((0.14 + mallow.burning * 0.3) * nearFire, (0.05 + mallow.burning * 0.08) * nearFire, 0.012 * nearFire);
+    camPoint(mallow.fill.position, 0.05, 0.25, 0.3);
+    mallow.fill.intensity = 1.1 * e * (1 - bite);
     if (mallow.flame.visible) {
-      mallow.flame.position.copy(mallow.puff.position).add(_mD.set(0, -0.05, 0));
+      mallow.flame.position.copy(mallow.puff.position).add(_mE.set(0, -0.05, 0));
       mallow.flame.rotation.y = Math.atan2(camera.position.x - mallow.flame.position.x, camera.position.z - mallow.flame.position.z);
       mallow.flameU.uTime.value = t % 600;
     }
   }
 
   // ---- 🧪 원소 불꽃 (불꽃 반응): 원소마다 들뜬 전자가 내려오며 내는 빛의 색이 달라요 ----
+  // salt/powder: 실제로 불꽃 반응에 쓰는 염화물 가루와 그 색 (대부분 하얀 가루, 구리만 푸른 초록)
   const ELEMENTS = [
-    { sym: "Li", ko: "리튬", hex: "#ff2a3c", rgb: [1, 0.12, 0.2], color: "빨간색", fact: "670 nm 근처의 진한 빨간빛" },
-    { sym: "Ca", ko: "칼슘", hex: "#ff6a1e", rgb: [1, 0.36, 0.1], color: "주황색", fact: "벽돌처럼 주황빛이 도는 빨강" },
-    { sym: "Na", ko: "나트륨", hex: "#ffcf26", rgb: [1, 0.78, 0.12], color: "노란색", fact: "589 nm 노란빛. 조금만 섞여도 다른 색을 덮어요" },
-    { sym: "Ba", ko: "바륨", hex: "#a6ff3c", rgb: [0.6, 1, 0.2], color: "황록색", fact: "연두에 가까운 초록빛" },
-    { sym: "Cu", ko: "구리", hex: "#1ff0bd", rgb: [0.1, 0.95, 0.72], color: "청록색", fact: "초록과 파랑 사이의 청록빛" },
-    { sym: "K", ko: "칼륨", hex: "#bd7bff", rgb: [0.74, 0.46, 1], color: "보라색", fact: "아주 옅은 연보라. 나트륨이 섞이면 코발트 유리로 걸러 봐요" }
+    { sym: "Li", ko: "리튬", hex: "#ff2a3c", rgb: [1, 0.12, 0.2], color: "빨간색", fact: "670 nm 근처의 진한 빨간빛", salt: "염화리튬", powder: [0.95, 0.94, 0.92] },
+    { sym: "Ca", ko: "칼슘", hex: "#ff6a1e", rgb: [1, 0.36, 0.1], color: "주황색", fact: "벽돌처럼 주황빛이 도는 빨강", salt: "염화칼슘", powder: [0.96, 0.95, 0.93] },
+    { sym: "Na", ko: "나트륨", hex: "#ffcf26", rgb: [1, 0.78, 0.12], color: "노란색", fact: "589 nm 노란빛. 조금만 섞여도 다른 색을 덮어요", salt: "염화나트륨(소금)", powder: [0.97, 0.97, 0.96] },
+    { sym: "Ba", ko: "바륨", hex: "#a6ff3c", rgb: [0.6, 1, 0.2], color: "황록색", fact: "연두에 가까운 초록빛", salt: "염화바륨", powder: [0.94, 0.94, 0.93] },
+    { sym: "Cu", ko: "구리", hex: "#1ff0bd", rgb: [0.1, 0.95, 0.72], color: "청록색", fact: "초록과 파랑 사이의 청록빛", salt: "염화구리", powder: [0.3, 0.62, 0.68] },
+    { sym: "K", ko: "칼륨", hex: "#bd7bff", rgb: [0.74, 0.46, 1], color: "보라색", fact: "아주 옅은 연보라. 나트륨이 섞이면 코발트 유리로 걸러 봐요", salt: "염화칼륨", powder: [0.95, 0.95, 0.95] }
   ];
-  function addElement(i, why) {
+  function applyElement(i, why) {   // 가루가 불에 닿은 순간: 불꽃 색이 바뀌어요
     const el = ELEMENTS[i];
     fire.tintTarget.setRGB(el.rgb[0], el.rgb[1], el.rgb[2]);
     if (fire.tintAmt < 0.05) fire.tintCur.copy(fire.tintTarget);
     fire.tintHold = 22;
     fire.boost = 1;
     for (let k = 0; k < 16; k++) spawnSpark(true);
-    note("🧪 " + el.ko + "(" + el.sym + ") → " + el.color + " 불꽃 · " + el.fact, 6500);
-    console.log("[🧪 element] 원소 넣음 ->", el.sym, el.ko, "| 색:", el.hex, "| 이유:", why);
+    playFlare();
+    note("🧪 " + el.salt + " 가루 → " + el.ko + "(" + el.sym + ") " + el.color + " 불꽃 · " + el.fact, 6500);
+    console.log("[🧪 element] 가루가 불에 닿음 ->", el.sym, el.ko, "| 색:", el.hex, "| 이유:", why);
+  }
+  // 가루·반짝이 알갱이: 점 하나하나 크기·색·투명도가 달라요
+  const PARTICLE_VERT = `
+    attribute vec3 aColor; attribute float aSize; attribute float aAlpha;
+    uniform float uScale; varying vec3 vC; varying float vA;
+    void main() {
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * mv;
+      gl_PointSize = aSize * uScale * projectionMatrix[1][1] / max(0.05, -mv.z);
+      vC = aColor; vA = aAlpha;
+    }`;
+  const PARTICLE_FRAG = `
+    varying vec3 vC; varying float vA;
+    void main() {
+      float r = length(gl_PointCoord - 0.5);
+      if (r > 0.5) discard;
+      gl_FragColor = vec4(vC, smoothstep(0.5, 0.12, r) * vA);
+    }`;
+  function particlePool(n, additive) {
+    const geo = new THREE.BufferGeometry();
+    const P = { pos: new Float32Array(n * 3), col: new Float32Array(n * 3), size: new Float32Array(n), alpha: new Float32Array(n), list: [] };
+    geo.setAttribute("position", new THREE.BufferAttribute(P.pos, 3));
+    geo.setAttribute("aColor", new THREE.BufferAttribute(P.col, 3));
+    geo.setAttribute("aSize", new THREE.BufferAttribute(P.size, 1));
+    geo.setAttribute("aAlpha", new THREE.BufferAttribute(P.alpha, 1));
+    P.mat = new THREE.ShaderMaterial({ uniforms: { uScale: { value: 400 } }, vertexShader: PARTICLE_VERT, fragmentShader: PARTICLE_FRAG, transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
+    P.pts = new THREE.Points(geo, P.mat);
+    P.pts.frustumCulled = false; P.pts.visible = false;
+    scene.add(P.pts);
+    P.geo = geo;
+    for (let i = 0; i < n; i++) P.list.push({ on: false, age: 0, life: 1 });
+    return P;
+  }
+  function takeParticle(P) { for (let i = 0; i < P.list.length; i++) if (!P.list[i].on) { P.list[i].i = i; return P.list[i]; } return null; }
+  const powder = particlePool(150, false), glints = particlePool(120, true);
+  const POWDER_G = 5.5;   // 가루는 가벼워서 중력을 조금 약하게
+  const SPRINKLE = { LEN: 1.9, N: 110 };
+  const sprinkle = { t: -1, el: 0, why: "", next: -1, nextWhy: "", emitted: 0, id: 0, landedId: 0 };
+  sprinkle.heap = addMesh(puffyGeometry(0.05, 0.12, 8.8), new THREE.MeshLambertMaterial({ color: 0xffffff }), 0, 0.04, 0, hands.L);   // 손 위에 얹은 가루 한 줌
+  sprinkle.heap.scale.set(1, 0.5, 1);
+  // 왼손 움직임: [시간, 앞, 오른쪽, 위, 팔 방향(앞, 오른쪽, 위)]
+  const SPRINKLE_KEYS = [
+    [0.0, 0.62, -0.3, -0.78, 0.3, 0.3, 0.9],
+    [0.38, 0.7, -0.27, -0.25, 0.3, 0.3, 0.9],     // 가루를 얹고 올라와요
+    [0.6, 0.63, -0.26, -0.29, 0.15, 0.3, 0.95],   // 살짝 당겼다가
+    [0.82, 0.95, -0.25, -0.22, 0.95, 0.15, 0.35], // 휙! 불 쪽으로 뿌려요 (불을 가리지 않게 왼쪽 아래에서)
+    [1.35, 0.9, -0.26, -0.25, 0.85, 0.18, 0.5],   // 톡톡 털고
+    [1.9, 0.66, -0.3, -0.85, 0.3, 0.3, 0.9]       // 내려가요
+  ];
+  function addElement(i, why) {   // 버튼: 왼손이 가루를 집어 불에 뿌려요. 가루가 불에 닿아야 색이 바뀌어요
+    if (!player.seat || player.seat.kind !== "fire") return;
+    if (sprinkle.t >= 0) { sprinkle.next = i; sprinkle.nextWhy = why; console.log("[🤍 hand] 뿌리는 중 -> 다음 차례:", ELEMENTS[i].sym); return; }
+    const pc = ELEMENTS[i].powder;
+    sprinkle.t = 0; sprinkle.el = i; sprinkle.why = why; sprinkle.emitted = 0; sprinkle.id++;
+    sprinkle.heap.material.color.setRGB(pc[0], pc[1], pc[2]);
+    console.log("[🤍 hand] 가루 뿌리기 시작 -> 원소:", ELEMENTS[i].sym, "| 가루:", ELEMENTS[i].salt, "| 이유:", why);
+  }
+  const _sp = new THREE.Vector3(), _v2 = new THREE.Vector2();
+  function emitPowder(from) {
+    const p = takeParticle(powder);
+    if (!p) return;
+    const el = ELEMENTS[sprinkle.el], q = Math.random() * 6.28, r = Math.sqrt(Math.random()) * 0.42, T = 0.5 + Math.random() * 0.35;
+    const tx = FIRE.x + Math.cos(q) * r, ty = 0.45 + Math.random() * 0.5, tz = FIRE.z + Math.sin(q) * r;   // 불 바닥 아무 데나
+    p.x0 = from.x + (Math.random() - 0.5) * 0.04; p.y0 = from.y + (Math.random() - 0.5) * 0.03; p.z0 = from.z + (Math.random() - 0.5) * 0.04;
+    p.vx = (tx - p.x0) / T + (Math.random() - 0.5) * 0.3; p.vz = (tz - p.z0) / T + (Math.random() - 0.5) * 0.3;
+    p.vy = (ty - p.y0) / T + 0.5 * POWDER_G * T;   // 포물선으로 날아가 딱 불에 떨어지게
+    p.age = 0; p.life = T; p.on = true; p.el = sprinkle.el; p.id = sprinkle.id; p.why = sprinkle.why;
+    const i = p.i, warm = 0.85;   // 불빛을 받은 가루 색
+    powder.col[i * 3] = el.powder[0] * warm; powder.col[i * 3 + 1] = el.powder[1] * warm * 0.86; powder.col[i * 3 + 2] = el.powder[2] * warm * 0.72;
+    powder.size[i] = 0.012 + Math.random() * 0.014;
+    powder.geo.attributes.aColor.needsUpdate = true; powder.geo.attributes.aSize.needsUpdate = true;
+  }
+  function landPowder(p) {   // 불에 떨어진 가루는 그 원소 색으로 반짝 타올라요
+    for (let k = 0; k < 2; k++) {
+      const g = takeParticle(glints);
+      if (!g) break;
+      const el = ELEMENTS[p.el], i = g.i;
+      g.on = true; g.age = 0; g.life = 0.35 + Math.random() * 0.5;
+      g.x = FIRE.x + (p.x0 + p.vx * p.life - FIRE.x) + (Math.random() - 0.5) * 0.2;
+      g.y = p.y0 + p.vy * p.life - 0.5 * POWDER_G * p.life * p.life;
+      g.z = FIRE.z + (p.z0 + p.vz * p.life - FIRE.z) + (Math.random() - 0.5) * 0.2;
+      g.vy = 0.6 + Math.random() * 1.2;
+      glints.col[i * 3] = el.rgb[0]; glints.col[i * 3 + 1] = el.rgb[1]; glints.col[i * 3 + 2] = el.rgb[2];
+      glints.size[i] = 0.05 + Math.random() * 0.07;
+      glints.geo.attributes.aColor.needsUpdate = true; glints.geo.attributes.aSize.needsUpdate = true;
+    }
+    if (p.id !== sprinkle.landedId) { sprinkle.landedId = p.id; applyElement(p.el, p.why); }   // 첫 가루가 닿는 순간 색이 바뀌어요
+  }
+  function updateParticles(dt) {
+    const sc = renderer.getDrawingBufferSize(_v2).y / 2;
+    powder.mat.uniforms.uScale.value = sc; glints.mat.uniforms.uScale.value = sc;
+    let any = false;
+    for (let i = 0; i < powder.list.length; i++) {
+      const p = powder.list[i];
+      if (!p.on) { powder.alpha[i] = 0; continue; }
+      p.age += dt;
+      if (p.age >= p.life) { p.on = false; powder.alpha[i] = 0; landPowder(p); continue; }
+      any = true;
+      const a = p.age;
+      powder.pos[i * 3] = p.x0 + p.vx * a; powder.pos[i * 3 + 1] = p.y0 + p.vy * a - 0.5 * POWDER_G * a * a; powder.pos[i * 3 + 2] = p.z0 + p.vz * a;
+      powder.alpha[i] = 0.9;
+    }
+    powder.pts.visible = any;
+    powder.geo.attributes.position.needsUpdate = true; powder.geo.attributes.aAlpha.needsUpdate = true;
+    any = false;
+    for (let i = 0; i < glints.list.length; i++) {
+      const g = glints.list[i];
+      if (!g.on) { glints.alpha[i] = 0; continue; }
+      g.age += dt;
+      if (g.age >= g.life) { g.on = false; glints.alpha[i] = 0; continue; }
+      any = true;
+      g.y += g.vy * dt;
+      glints.pos[i * 3] = g.x; glints.pos[i * 3 + 1] = g.y; glints.pos[i * 3 + 2] = g.z;
+      glints.alpha[i] = Math.sin(Math.PI * g.age / g.life);
+    }
+    glints.pts.visible = any;
+    glints.geo.attributes.position.needsUpdate = true; glints.geo.attributes.aAlpha.needsUpdate = true;
+  }
+  function updateSprinkle(dt) {   // updateCamera 다음에 불러요
+    const atFire = state.mode === "play" && !!player.seat && player.seat.kind === "fire";
+    if (sprinkle.t >= 0 && !atFire) { sprinkle.t = -1; sprinkle.next = -1; console.log("[🤍 hand] 자리에서 일어나서 뿌리기 멈춤"); }
+    hands.L.visible = sprinkle.t >= 0;
+    if (sprinkle.t >= 0) {
+      const prev = sprinkle.t;
+      sprinkle.t += dt;
+      const t = Math.min(sprinkle.t, SPRINKLE.LEN), K = SPRINKLE_KEYS;
+      let k = 0; while (k < K.length - 2 && t > K[k + 1][0]) k++;
+      const A = K[k], B = K[k + 1], f = sstep(0, 1, (t - A[0]) / (B[0] - A[0]));
+      const v = []; for (let j = 1; j < 7; j++) v.push(A[j] + (B[j] - A[j]) * f);
+      const sx = Math.min(1, sideRoom(0.7) * 0.72 / 0.27);   // 폰처럼 좁은 화면이면 손을 안쪽으로
+      const shake = t > 0.9 && t < 1.35 ? Math.sin((t - 0.9) * Math.PI * 2 * 5.5) * 0.022 * Math.sin(Math.PI * (t - 0.9) / 0.45) : 0;
+      camPoint(_sp, v[0], v[1] * sx, v[2] + shake);
+      placeHand(hands.L, _sp, camDir(_hq, v[3], v[4], v[5]));
+      if (prev < 0.64 && sprinkle.t >= 0.64) playSprinkle();
+      const lin = function (a, b) { return clamp((t - a) / (b - a), 0, 1); };
+      const want = Math.floor(SPRINKLE.N * (0.72 * lin(0.64, 0.86) + 0.28 * lin(0.9, 1.35)));
+      if (want > sprinkle.emitted) {
+        hands.L.updateMatrixWorld(true);
+        hands.L.localToWorld(_mE.set(0, 0.06, 0));
+        while (sprinkle.emitted < want) { emitPowder(_mE); sprinkle.emitted++; }
+      }
+      const left = 1 - sprinkle.emitted / SPRINKLE.N;
+      sprinkle.heap.visible = left > 0.03;
+      sprinkle.heap.scale.set(left, 0.5 * left, left);
+      if (sprinkle.t >= SPRINKLE.LEN) {
+        sprinkle.t = -1; hands.L.visible = false;
+        if (sprinkle.next >= 0) { const n = sprinkle.next; sprinkle.next = -1; addElement(n, sprinkle.nextWhy); }
+      }
+    }
+    updateParticles(dt);
   }
   const fireTools = document.getElementById("fireTools"), elemRow = document.getElementById("elemRow");
   const btnMallow = document.getElementById("btnMallow"), btnPush = document.getElementById("btnPush"), btnElem = document.getElementById("btnElem");
@@ -3475,8 +3931,8 @@
     const atFire = state.mode === "play" && !!player.seat && player.seat.kind === "fire";
     fireTools.hidden = !atFire;
     if (!atFire) { elemRow.hidden = true; btnElem.setAttribute("aria-expanded", "false"); return; }
-    btnMallow.textContent = !mallow.on ? "🍡 마시멜로 꽂기 (Q)" : mallow.burning > 0 ? "💨 후~ 불어 끄기 (Q)" : "😋 먹기 (Q)";
-    btnPush.hidden = !mallow.on || mallow.burning > 0;
+    btnMallow.textContent = !mallow.on ? "🍡 마시멜로 꽂기 (Q)" : mallow.burning > 0 ? "💨 후~ 불어 끄기 (Q)" : mallow.inspect >= 0 ? "😋 바로 냠 (Q)" : "😋 먹기 (Q)";
+    btnPush.hidden = !mallow.on || mallow.burning > 0 || mallow.inspect >= 0;
   }
 
   function updateSpring(dt) {   // 김이 천천히 오르며 퍼졌다 사라져요
@@ -3722,7 +4178,6 @@
     updateKeycaps(dt);
     updateZone();
     updateFire(dt, t);
-    updateMallow(dt, t);
     updateRain(dt);
     updateSea(t);
     updateNearSeat();
@@ -3737,6 +4192,9 @@
     updateNet();
     updateOthers(dt);
     updateCamera(dt);
+    updateCamBasis();
+    updateMallow(dt, t);   // 1인칭 손·꼬챙이는 카메라 기준이라 카메라 다음에
+    updateSprinkle(dt);
     targetRing.material.opacity = Math.max(0, targetRing.material.opacity - dt * 0.6);
     renderer.render(scene, camera);
     updateNametag();
