@@ -36,6 +36,7 @@
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
   }
+  [hidden] { display: none !important; }   /* hidden이 붙은 건 CSS가 뭐라 하든 숨겨요 */
   button, input { font: inherit; color: inherit; }
   button { cursor: pointer; }
   :focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
@@ -67,7 +68,20 @@
   }
   .pill-btn:hover { background: var(--panel); }
   .pill-btn[aria-pressed="false"] { color: var(--muted); }
-  .hud-side { display: flex; justify-content: flex-end; }
+  .hud-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .people-chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px;
+    background: var(--panel-soft); border: 1px solid var(--line); backdrop-filter: blur(6px);
+    font-family: var(--font-display); font-size: 15px;
+  }
+  .people-mode { font-size: 12px; color: var(--muted); }
+  .people-mode:empty { display: none; }
+  .emoji-bar { display: flex; flex-direction: column; gap: 6px; }
+  .emoji-btn {
+    width: 42px; height: 42px; padding: 0; border-radius: 50%; line-height: 1; font-size: 21px;
+    border: 1px solid var(--line); background: var(--panel-soft); backdrop-filter: blur(6px);
+  }
+  .emoji-btn:hover { background: var(--panel); }
   #minimap {
     width: 132px; height: 132px; border-radius: 18px;
     background: rgba(13, 18, 48, 0.72); border: 1px solid var(--line);
@@ -191,6 +205,7 @@
     .brand h1 { font-size: 34px; }
     .brand p.lead { display: none; }
     #minimap { width: 104px; height: 104px; }
+    .emoji-btn { width: 38px; height: 38px; font-size: 19px; }
     .controls { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -213,9 +228,13 @@
       <button class="pill-btn" id="btnEdit">꾸미기</button>
     </div>
   </div>
-  <div class="hud-side"><canvas id="minimap" width="264" height="264" aria-label="지도. 누르면 그곳으로 걸어가요"></canvas></div>
+  <div class="hud-side">
+    <canvas id="minimap" width="264" height="264" aria-label="지도. 누르면 그곳으로 걸어가요"></canvas>
+    <div class="people-chip" id="peopleChip" aria-live="polite"><span aria-hidden="true">👥</span><span id="peopleCount">1</span><span class="people-mode" id="peopleMode"></span></div>
+    <div class="emoji-bar" id="emojiBar" aria-label="이모티콘 보내기"></div>
+  </div>
   <div class="hud-bottom">
-    <p class="controls"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>·방향키로 걷기 · <kbd>Shift</kbd> 달리기 · 드래그로 둘러보기 · 바닥이나 지도를 누르면 그곳으로 걸어가요 · <kbd>E</kbd> 앉기 · <kbd>M</kbd> 멍 모드</p>
+    <p class="controls"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>·방향키로 걷기 · <kbd>Shift</kbd> 달리기 · 드래그로 둘러보기 · 바닥이나 지도를 누르면 그곳으로 걸어가요 · <kbd>E</kbd> 앉기 · <kbd>1</kbd>~<kbd>5</kbd> 이모티콘 · <kbd>M</kbd> 멍 모드</p>
     <p class="help">마음이 많이 힘들 땐 혼자 버티지 말아요. 한국 <strong>109</strong> · 다른 나라 <a href="https://findahelpline.com" target="_blank" rel="noopener">findahelpline.com</a></p>
   </div>
 </div>
@@ -250,7 +269,7 @@
     <div class="accs" id="accs"></div>
   </fieldset>
   <button class="enter" id="btnEnter">들어가기</button>
-  <p class="note">소리가 나요. 이어폰을 끼면 더 좋아요. 지금은 혼자 걷는 버전이고, 다른 사람과 같이 있는 기능은 다음 단계에서 붙어요.</p>
+  <p class="note">소리가 나요. 이어폰을 끼면 더 좋아요. 같은 세계에 들어온 사람들의 눈사람과 이름이 보이고, 숫자 1~5로 이모티콘을 보낼 수 있어요. 목소리 대화는 아직 없어요.</p>
   <p class="help">마음이 많이 힘들 땐 한국 <strong>109</strong> · 다른 나라 <a href="https://findahelpline.com" target="_blank" rel="noopener">findahelpline.com</a></p>
 </section>
 
@@ -259,6 +278,14 @@
 (function () {
   "use strict";
   console.log("[🌙 Soft Place] 스크립트 시작 -> THREE 버전: r" + THREE.REVISION);
+
+  // =====================================================================
+  // 0. 같이 있기 설정
+  //    Firebase Realtime Database 주소를 따옴표 안에 넣으면 다른 사람과 연결돼요.
+  //    예: "https://soft-place-xxxxx-default-rtdb.asia-southeast1.firebasedatabase.app"
+  //    비워 두면 '탭 시험 모드': 같은 브라우저에서 연 탭끼리만 서로 보여요.
+  // =====================================================================
+  const FIREBASE_DB_URL = "";
 
   // =====================================================================
   // 1. 기본 설정값
@@ -1463,6 +1490,7 @@
     if (player.seat && !e.repeat && MOVE_CODES.indexOf(e.code) >= 0 && e.code.indexOf("Shift") < 0) standUp("이동 키");
     if (MOVE_CODES.indexOf(e.code) >= 0) keys.add(e.code);
     if (e.code === "KeyM" && !e.repeat) toggleZen();
+    if (!e.repeat && /^Digit[1-5]$/.test(e.code)) sendEmoji(EMOJIS[Number(e.code.slice(5)) - 1], "키보드");
     if (!e.repeat && state.zone === "keys") {
       const letter = e.code === "Space" ? " " : (e.code.indexOf("Key") === 0 ? e.code.slice(3) : null);
       if (letter && capByKey[letter]) pressCap(capByKey[letter], "keyboard");
@@ -2010,6 +2038,257 @@
   });
 
   // =====================================================================
+  // 8.5 같이 있기: 다른 사람 눈사람 + 이름표 + 이모티콘
+  //     보내는 것: 이름, 옷 색, 액세서리, 위치, 방향, 이모티콘 (0.2초에 한 번까지, 가만히 있으면 3초에 한 번)
+  // =====================================================================
+  const MY_ID = Math.random().toString(36).slice(2, 10);   // 이 탭의 번호 (새로고침하면 새로 뽑아요)
+  const EMOJIS = ["👋", "😊", "😂", "❤️", "😴"];
+  const ACC_IDS = ACCESSORIES.map(function (a) { return a.id; });
+  const others = {};   // 다른 사람 번호 -> 눈사람과 상태
+  const net = { mode: "off", online: false, send: null, lastSent: -1e9, lastKey: "", emoji: "", emojiKey: 0, sentCount: 0, logAt: 0 };
+  const peopleCount = document.getElementById("peopleCount");
+  const peopleMode = document.getElementById("peopleMode");
+  const peopleChip = document.getElementById("peopleChip");
+  const emojiBar = document.getElementById("emojiBar");
+
+  // 이모티콘 그림 5개는 미리 만들어 두고 모두가 같이 써요
+  const emojiTex = {};
+  EMOJIS.forEach(function (em) {
+    emojiTex[em] = makeCanvasTexture(128, 128, function (g, w, h) {
+      g.font = '92px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+      g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillText(em, w / 2, h / 2 + 6);
+    });
+  });
+  function makeEmojiHolder(group) {   // 머리 위 말풍선 자리 (평소엔 숨김)
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTex[EMOJIS[0]], transparent: true, depthWrite: false }));
+    sp.position.set(0, 4.8, 0); sp.visible = false;   // 이름표 바로 위
+    group.add(sp);
+    return { sprite: sp, born: 0, until: 0 };
+  }
+  function popEmoji(holder, em) {
+    holder.sprite.material.map = emojiTex[em];
+    holder.sprite.material.needsUpdate = true;
+    holder.sprite.visible = true;
+    holder.born = performance.now(); holder.until = holder.born + 3200;
+  }
+  function updateEmoji(holder) {
+    if (!holder.sprite.visible) return;
+    const now = performance.now(), age = (now - holder.born) / 1000, left = (holder.until - now) / 1000;
+    if (left <= 0) { holder.sprite.visible = false; return; }
+    const sc = 1.15 * Math.min(1, age * 5) * (1 + 0.08 * Math.sin(age * 6));   // 퐁 하고 나타나서 살랑살랑
+    holder.sprite.scale.set(sc, sc, 1);
+    holder.sprite.material.opacity = Math.min(1, left * 2);
+  }
+  const myEmoji = makeEmojiHolder(player.parts.group);
+
+  // 다른 사람 이름표: 3D 세계 안의 판이라 나무 뒤에 가려지고 안개 속으로 사라져요
+  function makeNameTag(name) {
+    const c = document.createElement("canvas"); c.width = 512; c.height = 96;
+    const g = c.getContext("2d");
+    let size = 42;
+    g.font = size + 'px "Jua", "Malgun Gothic", sans-serif';
+    const textW = g.measureText(name).width;
+    if (textW > c.width - 56) { size = Math.floor(size * (c.width - 56) / textW); g.font = size + 'px "Jua", "Malgun Gothic", sans-serif'; }
+    const pillW = Math.min(c.width - 8, g.measureText(name).width + 44);
+    g.fillStyle = "rgba(13, 18, 48, 0.62)";
+    roundRect(g, (c.width - pillW) / 2, 12, pillW, c.height - 24, (c.height - 24) / 2); g.fill();
+    g.fillStyle = "#f5f2ff"; g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(name, c.width / 2, c.height / 2 + 2);
+    const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    sp.scale.set(3.6, 0.675, 1); sp.position.set(0, 3.8, 0);   // 신사 모자보다 위
+    return sp;
+  }
+  function safeLook(d) {   // 받은 값은 믿지 않고 한 번 걸러요
+    return {
+      n: (typeof d.n === "string" && d.n.trim() ? d.n.trim() : "눈송이").slice(0, 12),
+      c: (typeof d.c === "string" && /^#[0-9a-fA-F]{6}$/.test(d.c)) ? d.c : "#ffffff",
+      a: ACC_IDS.indexOf(d.a) >= 0 ? d.a : "none"
+    };
+  }
+  function onRemote(id, d) {
+    if (!d || id === MY_ID || typeof d.x !== "number" || typeof d.z !== "number") return;
+    const lk = safeLook(d);
+    let o = others[id];
+    if (!o) {
+      const parts = buildSnowman({ color: lk.c, acc: lk.a });
+      const tag = makeNameTag(lk.n);
+      parts.group.add(tag);
+      o = others[id] = {
+        parts: parts, tag: tag, emoji: makeEmojiHolder(parts.group),
+        pos: new THREE.Vector3(d.x, typeof d.y === "number" ? d.y : 0, d.z), goal: new THREE.Vector3(),
+        heading: typeof d.h === "number" ? d.h : 0, goalH: 0, walkPhase: Math.random() * 6, moving: false,
+        n: lk.n, c: lk.c, a: lk.a, ek: d.ek, seen: 0
+      };
+      console.log("[👥 join] 다른 사람 들어옴 -> 번호:", id, "| 이름:", lk.n, "| 위치 x:", d.x.toFixed(1), "z:", d.z.toFixed(1));
+      updatePeople();
+    }
+    o.goal.set(d.x, typeof d.y === "number" ? d.y : 0, d.z);
+    if (typeof d.h === "number") o.goalH = d.h;
+    o.seen = performance.now();
+    if (lk.n !== o.n) {
+      o.parts.group.remove(o.tag);
+      o.tag.material.map.dispose(); o.tag.material.dispose();
+      o.tag = makeNameTag(lk.n); o.parts.group.add(o.tag);
+      console.log("[👥 name] 이름 바뀜 ->", o.n, "->", lk.n);
+      o.n = lk.n;
+    }
+    if (lk.c !== o.c) { o.parts.cloth.color.set(lk.c); o.c = lk.c; }
+    if (lk.a !== o.a) { setAccessory(o.parts, lk.a); o.a = lk.a; }
+    if (d.ek !== o.ek) {
+      o.ek = d.ek;
+      if (EMOJIS.indexOf(d.e) >= 0) {   // 정해진 5개 말고는 보여주지 않아요
+        popEmoji(o.emoji, d.e);
+        console.log("[💬 emoji] 받음 ->", o.n, d.e);
+      }
+    }
+  }
+  function onRemoteGone(id, why) {
+    const o = others[id];
+    if (!o) return;
+    scene.remove(o.parts.group);
+    o.parts.group.traverse(function (m) { if (m.isMesh && m.geometry) m.geometry.dispose(); });   // 이 눈사람만의 모양은 버려요 (같이 쓰는 재질은 남김)
+    o.parts.cloth.dispose();
+    o.tag.material.map.dispose(); o.tag.material.dispose();
+    delete others[id];
+    console.log("[👥 leave] 다른 사람 나감 -> 번호:", id, "| 이름:", o.n, "| 이유:", why);
+    updatePeople();
+  }
+  function updatePeople() {
+    peopleCount.textContent = String(1 + Object.keys(others).length);
+    const label = net.mode === "firebase" ? (net.online ? "" : "연결 중") : net.mode === "local" ? "탭 시험" : "혼자";
+    peopleMode.textContent = label;
+    peopleChip.title = net.mode === "firebase" ? "지금 이 세계에 있는 사람 수" : net.mode === "local" ? "탭 시험 모드: 이 브라우저의 다른 탭에 있는 눈사람만 보여요" : "혼자 모드";
+  }
+
+  function myState() {
+    const p = player.pos, r = function (v) { return Math.round(v * 100) / 100; };
+    return { n: (look.name || "눈송이").slice(0, 12), c: look.color, a: look.acc, x: r(p.x), y: r(p.y), z: r(p.z), h: r(player.heading), e: net.emoji, ek: net.emojiKey };
+  }
+  function updateNet() {
+    if (!net.send || state.mode !== "play") return;
+    const now = performance.now(), d = myState(), key = JSON.stringify(d);
+    if ((key !== net.lastKey && now - net.lastSent > 200) || now - net.lastSent > 3000) {
+      net.send(d);
+      net.lastSent = now; net.lastKey = key; net.sentCount++;
+      if (now - net.logAt > 5000) {
+        net.logAt = now;
+        console.log("[📡 net] 내 상태 보냄 -> 지금까지", net.sentCount, "번 | 방식:", net.mode, "| 같이 있는 사람:", Object.keys(others).length);
+      }
+    }
+  }
+  function sendEmoji(em, how) {
+    if (state.mode !== "play" || !em) return;
+    net.emoji = em; net.emojiKey++;
+    net.lastSent = -1e9;   // 기다리지 말고 바로 보내기
+    popEmoji(myEmoji, em);
+    console.log("[💬 emoji] 보냄 ->", em, "| 방법:", how);
+  }
+  EMOJIS.forEach(function (em, i) {
+    const b = document.createElement("button");
+    b.className = "emoji-btn"; b.type = "button"; b.textContent = em;
+    b.title = "이모티콘 (" + (i + 1) + ")";
+    b.setAttribute("aria-label", "이모티콘 " + em + " 보내기 (숫자 " + (i + 1) + ")");
+    b.addEventListener("click", function () { sendEmoji(em, "버튼"); });
+    emojiBar.appendChild(b);
+  });
+
+  // ---- 연결 방식 1: 탭 시험 모드 (같은 브라우저의 탭끼리 BroadcastChannel로 주고받기) ----
+  function startLocalNet(why) {
+    try {
+      const bc = new BroadcastChannel("softplace-v1");
+      bc.onmessage = function (ev) {
+        const m = ev.data || {};
+        if (m.id === MY_ID) return;
+        if (m.type === "state") onRemote(m.id, m.data);
+        else if (m.type === "bye") onRemoteGone(m.id, "탭 닫음");
+        else if (m.type === "hello") net.lastSent = -1e9;   // 새로 연 탭에 내 모습을 바로 보여주기
+      };
+      net.send = function (d) { bc.postMessage({ type: "state", id: MY_ID, data: d }); };
+      window.addEventListener("pagehide", function () { bc.postMessage({ type: "bye", id: MY_ID }); });
+      bc.postMessage({ type: "hello", id: MY_ID });
+      net.mode = "local";
+      console.log("[📡 net] 탭 시험 모드 시작 -> 이유:", why, "| 내 번호:", MY_ID);
+    } catch (err) {
+      net.mode = "off";
+      console.log("[📡 net] 탭 시험 모드도 못 켬(이 브라우저는 막혀 있어요) -> 혼자 모드:", err && err.message);
+    }
+    updatePeople();
+  }
+  // ---- 연결 방식 2: Firebase Realtime Database (진짜로 다른 사람과 연결) ----
+  function loadScript(src) {
+    return new Promise(function (ok, fail) {
+      const sc = document.createElement("script");
+      sc.src = src;
+      sc.onload = ok;
+      sc.onerror = function () { fail(new Error("스크립트를 못 불러옴: " + src)); };
+      document.head.appendChild(sc);
+    });
+  }
+  function startFirebaseNet() {
+    const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
+    console.log("[📡 net] Firebase 연결 시작 -> 주소:", FIREBASE_DB_URL);
+    loadScript(SDK + "firebase-app-compat.js").then(function () {
+      return loadScript(SDK + "firebase-database-compat.js");
+    }).then(function () {
+      firebase.initializeApp({ databaseURL: FIREBASE_DB_URL });
+      const db = firebase.database(), list = db.ref("players"), me = list.child(MY_ID);
+      const got = function (snap) { onRemote(snap.key, snap.val()); };
+      list.on("child_added", got);
+      list.on("child_changed", got);
+      list.on("child_removed", function (snap) { onRemoteGone(snap.key, "나감"); });
+      db.ref(".info/connected").on("value", function (snap) {
+        net.online = !!snap.val();
+        if (net.online) {
+          me.onDisconnect().remove();   // 창을 닫거나 인터넷이 끊기면 서버가 내 눈사람을 지워줘요
+          net.lastSent = -1e9;
+        }
+        console.log("[📡 net] Firebase 연결 상태 ->", net.online ? "연결됨" : "끊김");
+        updatePeople();
+      });
+      net.send = function (d) {
+        d.t = firebase.database.ServerValue.TIMESTAMP;
+        me.set(d).catch(function (err) { console.log("[📡 net] 보내기 거절됨(규칙 확인 필요) ->", err && err.message); });
+      };
+      window.addEventListener("pagehide", function () { me.remove(); });
+      net.mode = "firebase";
+      updatePeople();
+    }).catch(function (err) {
+      console.log("[📡 net] Firebase 연결 실패 ->", err && err.message, "| 탭 시험 모드로 바꿈");
+      startLocalNet("Firebase 연결 실패");
+    });
+  }
+  function startNet() {
+    if (FIREBASE_DB_URL) startFirebaseNet(); else startLocalNet("Firebase 주소가 비어 있음");
+  }
+
+  function updateOthers(dt) {
+    const now = performance.now(), k = 1 - Math.exp(-dt * 8);
+    Object.keys(others).forEach(function (id) {
+      const o = others[id], parts = o.parts;
+      if (now - o.seen > 20000) { onRemoteGone(id, "20초 동안 소식 없음"); return; }
+      const dx = o.goal.x - o.pos.x, dz = o.goal.z - o.pos.z, far = Math.hypot(dx, dz);
+      if (far > 25) o.pos.copy(o.goal);   // 너무 멀리 떨어졌으면 순간이동
+      else { o.pos.x += dx * k; o.pos.y += (o.goal.y - o.pos.y) * k; o.pos.z += dz * k; }
+      o.moving = far > 0.15;
+      let diff = o.goalH - o.heading;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      o.heading += diff * Math.min(1, dt * 10);
+      if (o.moving) o.walkPhase += dt * 10;
+      parts.group.position.copy(o.pos);
+      parts.group.rotation.y = o.heading;
+      const bob = o.moving ? Math.abs(Math.sin(o.walkPhase)) * 0.14 : 0;
+      parts.rig.position.y += (bob - parts.rig.position.y) * Math.min(1, dt * 14);
+      const swing = o.moving ? Math.sin(o.walkPhase) * 0.6 : Math.sin(now / 900 + o.walkPhase) * 0.06;
+      parts.armL.rotation.x = swing; parts.armR.rotation.x = -swing;
+      updateEmoji(o.emoji);
+    });
+    updateEmoji(myEmoji);
+  }
+
+  // =====================================================================
   // 9. 매 프레임 업데이트
   // =====================================================================
   function groundHeightAt(x, z) {
@@ -2427,6 +2706,8 @@
     updateAmbient(dt);
     updateSky(dt, t);
     updateAudio(dt);
+    updateNet();
+    updateOthers(dt);
     updateCamera(dt);
     targetRing.material.opacity = Math.max(0, targetRing.material.opacity - dt * 0.6);
     renderer.render(scene, camera);
@@ -2446,7 +2727,10 @@
     if (typeof data.x === "number" && typeof data.z === "number") {
       player.pos.set(data.x, 0, data.z);
       cam.yaw = data.yaw || 0;
+    } else {
+      player.pos.set((Math.random() - 0.5) * 8, 0, 4 + Math.random() * 5);   // 여러 명이 한 자리에 겹쳐 나타나지 않게
     }
+    startNet();
     if (data.mode === "play") enterWorld(false); else openPanel(true);
     updateSoundButton();
     requestAnimationFrame(loop);
