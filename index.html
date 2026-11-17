@@ -2660,7 +2660,7 @@
     nb(t0, 1.5, "bandpass", 1400, 1100, 0.8, 0.02, 0.1);   // 숨소리 조금
     osc.start(t0); vib.start(t0); osc.stop(t0 + 1.6); vib.stop(t0 + 1.6);
   }
-  const BURNT_STYLE = "groan";   // 탄 마시멜로 먹을 때: "groan" 으으 / "cough" 콜록 + 재 연기 / "both" 둘 다
+  const BURNT_STYLE = "cough";   // 탄 마시멜로 먹을 때 (도윤 선택: cough): "groan" 으으 / "cough" 콜록 + 재 연기 / "both" 둘 다
   function coughAt(t0) {   // '콜록콜록': 목에서 터지는 잡음 + 짧은 'ㅗ' 목소리, 두 번
     const ctx = audio.ctx;
     [0, 0.17, 0.5, 0.66].forEach(function (d, i) {
@@ -3529,7 +3529,7 @@
     { max: 0.5, name: "말랑말랑 따뜻해지는 중…", look: "살짝 부풀고 군데군데 노르스름해요", taste: "따뜻하고 쫀득쫀득해요", sound: "chew", face: "😋" },
     { max: 0.8, name: "노릇노릇 황금빛! 지금 먹으면 딱 좋아요 ✨", look: "겉이 황금빛으로 바삭하게 구워졌어요", taste: "겉은 바삭, 속은 사르르 녹아요. 완벽해요!", sound: "crisp", face: "😋" },
     { max: 1.05, name: "갈색으로 그을렸어요", look: "갈색으로 그을려서 캐러멜처럼 반질반질해요", taste: "캐러멜처럼 쌉싸름하고 와삭와삭해요", sound: "crunch", face: "😋" },
-    { max: 99, name: "까맣게 탔어요…", look: "겉이 숯처럼 까맣게 탔어요. 갈라진 틈으로 속이 보여요", taste: "으으… 숯 맛이에요. 그래도 이게 캠핑이죠", sound: "burnt", face: "😖" }
+    { max: 99, name: "까맣게 탔어요…", look: "겉이 숯처럼 까맣게 탔어요. 갈라진 틈으로 속이 보여요", taste: "콜록콜록! 숯 맛이에요. 그래도 이게 캠핑이죠", sound: "burnt", face: "😖" }
   ];
   const INSPECT = { IN: 0.7, BITE: 2.9, END: 3.25 };   // 먹기 전에 눈앞으로 가져와(0.7초) 보고(2.2초) 냠(0.35초)
   const mallow = { on: false, cook: 0, burning: 0, push: 0, pushTarget: 0, stage: -1, eaten: 0, spin: 0, inspect: -1, bit: false, u: { cook: { value: 0 }, burn: { value: 0 } } };
@@ -3818,7 +3818,7 @@
       g.vx = camF.x * (0.15 + Math.random() * 0.25) + (Math.random() - 0.5) * 0.12; g.vz = camF.z * (0.15 + Math.random() * 0.25) + (Math.random() - 0.5) * 0.12;
       g.vy = 0.22 + Math.random() * 0.25;
       g.s0 = 0.04 + Math.random() * 0.05;
-      const v = 0.17 + Math.random() * 0.12, i = g.i;   // 불빛을 받은 회갈색 재
+      const v = 0.12 + Math.random() * 0.09, i = g.i;   // 불빛을 살짝 받은 검은 재
       ashes.col[i * 3] = v * 1.12; ashes.col[i * 3 + 1] = v; ashes.col[i * 3 + 2] = v * 0.88;
     }
     ashes.geo.attributes.aColor.needsUpdate = true;
@@ -3918,7 +3918,7 @@
       const k = g.age / g.life;
       ashes.pos[i * 3] = g.x; ashes.pos[i * 3 + 1] = g.y; ashes.pos[i * 3 + 2] = g.z;
       ashes.size[i] = g.s0 * (1 + 2.5 * k);
-      ashes.alpha[i] = 0.85 * Math.min(1, k * 6) * Math.pow(1 - k, 1.2);
+      ashes.alpha[i] = 0.92 * Math.min(1, k * 6) * Math.pow(1 - k, 1.2);
     }
     ashes.pts.visible = any;
     ashes.geo.attributes.position.needsUpdate = true; ashes.geo.attributes.aAlpha.needsUpdate = true; ashes.geo.attributes.aSize.needsUpdate = true;
