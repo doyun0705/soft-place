@@ -1,0 +1,22 @@
+{
+  "rules": {
+    "players": {
+      ".read": true,
+      "$id": {
+        ".write": "$id.length >= 4 && $id.length <= 12",
+        ".validate": "newData.hasChildren(['n', 'c', 'a', 'x', 'y', 'z', 'h', 'e', 'ek', 't'])",
+        "n": { ".validate": "newData.isString() && newData.val().length <= 12" },
+        "c": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)" },
+        "a": { ".validate": "newData.isString() && newData.val().length <= 12" },
+        "x": { ".validate": "newData.isNumber() && newData.val() > -200 && newData.val() < 200" },
+        "y": { ".validate": "newData.isNumber() && newData.val() > -5 && newData.val() < 10" },
+        "z": { ".validate": "newData.isNumber() && newData.val() > -200 && newData.val() < 200" },
+        "h": { ".validate": "newData.isNumber()" },
+        "e": { ".validate": "newData.isString() && newData.val().length <= 4" },
+        "ek": { ".validate": "newData.isNumber()" },
+        "t": { ".validate": "newData.isNumber() && newData.val() <= now" },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}
