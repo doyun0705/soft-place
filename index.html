@@ -54,6 +54,8 @@
     transition: opacity .6s ease;
   }
   .hud > * { pointer-events: auto; }
+  .hud > .hud-top, .hud > .hud-side { pointer-events: none; }   /* 가로로 긴 줄의 빈 곳이 마우스를 가로막지 않게 (막으면 화면 위쪽 절반에서 끌어도 시야가 안 돌아요). 안의 버튼·지도만 눌려요 */
+  .hud-top > *, .hud-side > * { pointer-events: auto; }
   .hud-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
   .zone-chip {
     display: inline-flex; align-items: center; gap: 8px;
@@ -131,7 +133,7 @@
   body.customizing .sit-btn { display: none; }
   body.zen .sit-btn { opacity: .4; }
   body.watching .hud, body.watching .nametag { opacity: 0; pointer-events: none; }
-  body.watching .hud > * { pointer-events: none; }
+  body.watching .hud * { pointer-events: none; }
   body.watching .toast { display: none; }
   body.watching .sit-btn { opacity: .22; transition: opacity .3s; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); }
   body.watching .sit-btn:hover, body.watching .sit-btn:focus-visible { opacity: 1; }
@@ -181,9 +183,9 @@
   .book-page.turn .book-line, .book-page.turn .book-no { animation: pageIn .5s ease both; }
   @keyframes pageIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
   body.zen .hud, body.zen .nametag { opacity: 0; pointer-events: none; }
-  body.zen .hud > * { pointer-events: none; }
+  body.zen .hud * { pointer-events: none; }
   body.customizing .hud { opacity: 0; pointer-events: none; }
-  body.customizing .hud > * { pointer-events: none; }
+  body.customizing .hud * { pointer-events: none; }
 
   /* ---------- 꾸미기 시트 ---------- */
   .panel {
@@ -197,7 +199,7 @@
   .brand .ko { margin: 6px 0 0; font-family: var(--font-display); color: var(--ember); font-size: 16px; letter-spacing: .08em; }
   .brand p.lead { margin: 14px 0 0; line-height: 1.6; color: var(--muted); font-size: 15px; }
   .field { display: flex; flex-direction: column; gap: 10px; border: 0; margin: 0; padding: 0; min-width: 0; }
-  .field legend, .field label.title { font-family: var(--font-display); font-size: 17px; padding: 0; margin-bottom: 10px; }
+  .field legend, .field label.title, .field span.title { font-family: var(--font-display); font-size: 17px; padding: 0; margin-bottom: 10px; }
   .field input[type="text"] {
     background: rgba(255,255,255,.07); border: 1px solid var(--line); border-radius: 12px;
     padding: 10px 12px; font-size: 16px;
@@ -219,6 +221,41 @@
     background: var(--ember); color: var(--ember-ink); font-family: var(--font-display); font-size: 20px;
   }
   .enter:hover { filter: brightness(1.06); }
+  /* 들어가는 방법 고르기: 혼자 / 아무 방이나 / 방 만들기 / 코드로 들어가기 */
+  .way {
+    display: flex; flex-direction: column; gap: 3px; align-items: flex-start; text-align: left;
+    padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line);
+    background: rgba(255,255,255,.06); font-family: var(--font-display);
+  }
+  .way strong { font-weight: 400; font-size: 17px; }
+  .way span { font-family: var(--font-body); font-size: 12.5px; color: var(--muted); }
+  .way:hover { border-color: var(--ember); background: rgba(255, 179, 107, .14); }
+  .way.solo { background: var(--ember); color: var(--ember-ink); border-color: transparent; }
+  .way.solo span { color: var(--ember-ink); opacity: .78; }
+  .way.solo:hover { background: var(--ember); filter: brightness(1.06); }
+  .ways { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ways-label { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+  .code-row { display: flex; gap: 8px; }
+  .field .code-row input[type="text"] { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: .2em; text-align: center; font-family: var(--font-display); }
+  .way-join {
+    padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); white-space: nowrap;
+    background: rgba(255,255,255,.06); font-family: var(--font-display); font-size: 15px;
+  }
+  .way-join:hover { border-color: var(--ember); background: rgba(255, 179, 107, .14); }
+  .link-btn { align-self: flex-start; background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; font-size: 14px; }
+  .link-btn:hover { color: var(--ink); }
+  .people-chip.copyable { cursor: pointer; }
+  @media (min-width: 701px) and (max-height: 1150px) {   /* 낮은 화면(노트북): 들어가는 방법이 스크롤 없이 다 보이게 줄여요 */
+    .panel { gap: 13px; padding-block: 16px 14px; }
+    .brand h1 { font-size: 34px; }
+    .brand p.lead { display: none; }
+    .field { gap: 7px; }
+    .field legend, .field label.title, .field span.title { margin-bottom: 3px; font-size: 16px; }
+    .swatch { height: 32px; }
+    .acc { padding: 7px 6px; }
+    .way { padding: 9px 12px; }
+    .ways-label { margin-top: 2px; }
+  }
   .panel .help { font-size: 13px; }
   .panel .note { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
 
@@ -255,6 +292,7 @@
     <div class="hud-actions">
       <button class="pill-btn" id="btnMic" hidden disabled>🎙️ 음성 준비 중</button>
       <button class="pill-btn" id="btnSound" aria-pressed="true">소리 켜짐</button>
+      <button class="pill-btn" id="btnAir" aria-pressed="false">공중샷</button>
       <button class="pill-btn" id="btnZen">멍 모드</button>
       <button class="pill-btn" id="btnEdit">꾸미기</button>
     </div>
@@ -265,7 +303,7 @@
     <div class="emoji-bar" id="emojiBar" aria-label="이모티콘 보내기"></div>
   </div>
   <div class="hud-bottom">
-    <p class="controls"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>·방향키로 걷기 · <kbd>Shift</kbd> 달리기 · 드래그로 둘러보기 · 바닥이나 지도를 누르면 그곳으로 걸어가요 · <kbd>E</kbd> 앉기 · 불멍 중 <kbd>Q</kbd> 마시멜로 · <kbd>1</kbd>~<kbd>5</kbd> 이모티콘 · <kbd>M</kbd> 멍 모드</p>
+    <p class="controls"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>·방향키로 걷기 · <kbd>Shift</kbd> 달리기 · 마우스로 끌어서 둘러보기(앉아서도) · <kbd>V</kbd> 공중샷 · 지도를 누르면 그곳으로 걸어가요 · <kbd>E</kbd> 앉기 · 불멍 중 <kbd>Q</kbd> 마시멜로 · <kbd>1</kbd>~<kbd>5</kbd> 이모티콘 · <kbd>M</kbd> 멍 모드</p>
     <p class="help">마음이 많이 힘들 땐 혼자 버티지 말아요. 한국 <strong>109</strong> · 다른 나라 <a href="https://findahelpline.com" target="_blank" rel="noopener">findahelpline.com</a></p>
   </div>
 </div>
@@ -308,8 +346,23 @@
     <legend>액세서리</legend>
     <div class="accs" id="accs"></div>
   </fieldset>
-  <button class="enter" id="btnEnter">들어가기</button>
-  <p class="note">소리가 나요. 이어폰을 끼면 더 좋아요. 같은 세계에 들어온 사람들의 눈사람과 이름이 보이고, 숫자 1~5로 이모티콘을 보낼 수 있어요. 목소리 대화는 아직 없어요.</p>
+  <div class="field" id="howBox">
+    <span class="title">어떻게 들어갈까요?</span>
+    <button class="way solo" id="waySolo" type="button"><strong>🌙 혼자 있기</strong><span>아무도 안 만나고 조용히 쉬어요</span></button>
+    <p class="ways-label">같이 있기</p>
+    <div class="ways">
+      <button class="way" id="wayRandom" type="button"><strong>🎲 아무 방이나</strong><span>사람이 있는 방으로 가요</span></button>
+      <button class="way" id="wayMake" type="button"><strong>🏠 방 만들기</strong><span>코드를 친구에게 알려요</span></button>
+    </div>
+    <div class="code-row">
+      <input type="text" id="codeInput" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="방 코드" aria-label="친구에게 받은 방 코드 4글자">
+      <button class="way-join" id="wayJoin" type="button">코드로 들어가기</button>
+    </div>
+    <p class="note" id="roomHint"></p>
+  </div>
+  <button class="enter" id="btnEnter" hidden>다 꾸몄어요</button>
+  <button class="link-btn" id="btnRooms" type="button" hidden>방 바꾸기</button>
+  <p class="note">소리가 나요. 이어폰을 끼면 더 좋아요. 같은 방에 들어온 사람들의 눈사람과 이름이 보이고, 숫자 1~5로 이모티콘을 보낼 수 있어요. 목소리 대화는 아직 없어요.</p>
   <p class="help">마음이 많이 힘들 땐 한국 <strong>109</strong> · 다른 나라 <a href="https://findahelpline.com" target="_blank" rel="noopener">findahelpline.com</a></p>
 </section>
 
@@ -324,6 +377,8 @@
   //    Firebase Realtime Database 주소를 따옴표 안에 넣으면 다른 사람과 연결돼요.
   //    예: "https://soft-place-xxxxx-default-rtdb.asia-southeast1.firebasedatabase.app"
   //    비워 두면 '탭 시험 모드': 같은 브라우저에서 연 탭끼리만 서로 보여요.
+  //    방: 처음에 혼자 / 아무 방이나(랜덤) / 방 만들기 / 코드로 들어가기 중에 골라요.
+  //        랜덤 방은 pub/방코드, 코드 방은 prv/방코드 아래에 저장돼요 (규칙은 database.rules.json).
   // =====================================================================
   const FIREBASE_DB_URL = "";
 
@@ -981,7 +1036,7 @@
 
   // ---- 🔥 모닥불 캠핑장 + 별 보기 ----
   // 불꽃은 셰이더(그래픽카드가 계산하는 그림)로 그려요: 위로 흐르는 무늬가 불꽃 끝을 갈라지게 하고, 뜨거울수록 흰빛
-  const fire = { flames: [], light: null, glow: null, pool: null, sparks: null, sparkData: [], coals: [], smoke: [], sparkAcc: 0, popIn: 1.2, popped: false, boost: 0,
+  const fire = { flames: [], light: null, glow: null, pool: null, sparks: null, sparkData: [], coals: [], smoke: [], sparkAcc: 0, popIn: 1.2, popped: false, boost: 0, surgeT: 9, surge: 0,
     tintCur: new THREE.Color(1, 0.5, 0.1), tintTarget: new THREE.Color(1, 0.5, 0.1), tintAmt: 0, tintHold: 0 };   // 원소 불꽃 색
   const FLAME_VERT = `
     varying vec2 vUv;
@@ -2374,8 +2429,11 @@
   // =====================================================================
   // 6. 상태 · 카메라 · 입력
   // =====================================================================
-  const state = { mode: "customize", zen: false, zone: "plaza", spinPause: 0 };
-  const cam = { yaw: 0, pitch: 0.42, dist: 11, pos: new THREE.Vector3(0, 6, 18), look: new THREE.Vector3(0, 1.6, 6), zenYaw: 0 };
+  const state = { mode: "customize", zen: false, aerial: false, zone: "plaza", spinPause: 0 };
+  const cam = { yaw: 0, pitch: 0.42, dist: 11, pos: new THREE.Vector3(0, 6, 18), look: new THREE.Vector3(0, 1.6, 6), zenYaw: 0,
+    air: 38, airPitch: 1.3,      // 공중샷: 높이(휠로 16~90), 내려다보는 각도
+    lookYaw: 0, lookPitch: 0 };  // 앉아서 내 눈으로 볼 때 고개 돌린 만큼
+  const LOOK_LIMIT = { stars: [1.4, 0.6, 0.7], view: [1.3, 0.4, 0.6], fire: [0.9, 0.35, 0.8] };   // [좌우, 아래, 위] 까지 고개를 돌릴 수 있어요 (라디안)
   const keys = new Set();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -2391,6 +2449,7 @@
     if (player.seat && !e.repeat && MOVE_CODES.indexOf(e.code) >= 0 && e.code.indexOf("Shift") < 0) standUp("이동 키");
     if (MOVE_CODES.indexOf(e.code) >= 0) keys.add(e.code);
     if (e.code === "KeyM" && !e.repeat) toggleZen();
+    if (e.code === "KeyV" && !e.repeat) toggleAerial("V 키");
     if (player.seat && player.seat.kind === "fire") {
       if (e.code === "KeyQ" && !e.repeat) mallowAction("Q 키");
       if (e.code === "Space" && mallow.on && mallow.inspect < 0) mallow.pushTarget = 1;
@@ -2407,7 +2466,7 @@
 
   let drag = null;
   canvas.addEventListener("pointerdown", function (e) {
-    drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false };
+    drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false, type: e.pointerType };
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* 일부 브라우저는 캡처를 거절해요 */ }
   });
   canvas.addEventListener("pointermove", function (e) {
@@ -2417,8 +2476,18 @@
     if (Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) > 6) drag.moved = true;
     if (!drag.moved) return;
     if (state.mode === "play") {
-      cam.yaw -= dx * 0.005;
-      cam.pitch = clamp(cam.pitch + dy * 0.004, 0.08, 1.25);
+      const st = player.seat, lim = st && LOOK_LIMIT[st.kind];
+      if (lim) {                       // 앉아서 내 눈으로 보는 자리: 고개를 돌려 둘러봐요
+        if (st.kind === "fire" && (mallow.on || sprinkle.t >= 0)) return;   // 마시멜로·가루를 든 동안엔 불을 봐요
+        cam.lookYaw = clamp(cam.lookYaw + dx * 0.004, -lim[0], lim[0]);
+        cam.lookPitch = clamp(cam.lookPitch + dy * 0.003, -lim[1], lim[2]);
+      } else if (state.aerial) {       // 공중샷: 빙 돌려 보기 + 내려다보는 각도
+        cam.yaw -= dx * 0.005;
+        cam.airPitch = clamp(cam.airPitch + dy * 0.004, 0.8, 1.5);
+      } else {
+        cam.yaw -= dx * 0.005;
+        cam.pitch = clamp(cam.pitch + dy * 0.004, 0.08, 1.25);
+      }
     } else {
       player.heading += dx * 0.012;
       state.spinPause = 2.5;
@@ -2426,17 +2495,19 @@
   });
   canvas.addEventListener("pointerup", function (e) {
     if (!drag) return;
-    const wasClick = !drag.moved && performance.now() - drag.t < 450;
+    const wasClick = !drag.moved && performance.now() - drag.t < 450, type = drag.type;
     drag = null;
-    if (wasClick && state.mode === "play") handleWorldClick(e.clientX, e.clientY);
+    if (wasClick && state.mode === "play") handleWorldClick(e.clientX, e.clientY, type);
   });
   canvas.addEventListener("pointercancel", function () { drag = null; });
+  canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });   // 오른쪽 버튼으로 끌어도 둘러볼 수 있게 메뉴를 막아요
   canvas.addEventListener("wheel", function (e) {
     e.preventDefault();
-    cam.dist = clamp(cam.dist + e.deltaY * 0.01, 6, 24);
+    if (state.aerial) cam.air = clamp(cam.air + e.deltaY * 0.04, 16, 90);
+    else cam.dist = clamp(cam.dist + e.deltaY * 0.01, 6, 24);
   }, { passive: false });
 
-  function handleWorldClick(cx, cy) {
+  function handleWorldClick(cx, cy, type) {
     ndc.set(cx / window.innerWidth * 2 - 1, -(cy / window.innerHeight) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
     const capHit = raycaster.intersectObjects(capMeshes, false)[0];
@@ -2449,8 +2520,9 @@
       ringChime(chimeHit.object.userData.chime, 1, "클릭");
       return;
     }
+    if (type !== "touch") return;   // 마우스 클릭으로는 안 걸어요 (도윤: 클릭 이동 빼기). 키보드가 없는 폰·태블릿만 톡 눌러서 걸어요
     const hit = raycaster.intersectObjects(walkables, false)[0];
-    if (hit) setWalkTarget(hit.point.x, hit.point.z, "바닥 클릭");
+    if (hit) setWalkTarget(hit.point.x, hit.point.z, "바닥 톡");
   }
   function setWalkTarget(x, z, why) {
     if (player.seat) standUp("클릭 이동");
@@ -2486,13 +2558,15 @@
   const EYES_ONLY = { stars: true, fire: true, read: true, view: true };   // 내 눈으로 그것만 보는 자리 (눈사람과 화면 글씨를 숨김)
   function eyesOnly(st) { return !!(st && EYES_ONLY[st.kind]); }
   function sitDown(st) {
+    if (state.aerial) toggleAerial("앉기");
     player.seat = st; player.target = null; keys.clear();
+    cam.lookYaw = cam.lookPitch = 0;
     camSaved.dist = cam.dist; camSaved.pitch = cam.pitch;
     cam.dist = 8.5; cam.pitch = 0.26; cam.yaw = st.heading + Math.PI - 0.6;
     body.classList.toggle("watching", eyesOnly(st));   // 불멍·별 보기·책 읽기: 화면 글씨를 숨기고 그것만 보여줘요
     if (st.kind === "read") openBook();
     if (st.kind === "fire") note("🔥 불멍 중 · Q 마시멜로 · 🧪 원소로 불꽃 색 바꾸기", 4500);
-    if (st.kind === "view") note("🏔️ 계곡 너머 마을 불빛과 은하수", 4000);
+    if (st.kind === "view") note("🏔️ 계곡 너머 마을 불빛과 은하수 · 마우스로 끌어서 둘러보기", 4500);
     refreshFireTools();
     console.log("[🪑 seat] 앉음 -> 종류:", st.kind, "| 자리 x:", st.x.toFixed(1), "z:", st.z.toFixed(1), "| 그것만 보기:", eyesOnly(st));
     refreshSeatButton();
@@ -2503,6 +2577,7 @@
     player.seat = null;
     player.pos.set(st.x + Math.sin(st.heading) * st.out, 0, st.z + Math.cos(st.heading) * st.out);
     cam.dist = camSaved.dist; cam.pitch = camSaved.pitch;
+    cam.lookYaw = cam.lookPitch = 0;
     body.classList.remove("watching");
     closeBook();
     mallowOff();
@@ -2555,6 +2630,7 @@
       const w = Math.random() * 2 - 1;
       if (type === "brown") { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; } else { d[i] = w; }
     }
+    if (type === "brown") { const gap = d[len - 1] - d[0]; for (let i = 0; i < len; i++) d[i] -= gap * i / len; }   // 끝과 처음 높이를 맞춰요 (안 맞으면 2초마다 '툭' 해요)
     return buf;
   }
   function loopNoise(ctx, buf) {
@@ -2573,12 +2649,22 @@
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) { console.log("[🔊 audio] 이 브라우저는 소리를 지원하지 않아요"); return; }
     const ctx = new AC();
-    const master = ctx.createGain(); master.gain.value = 0.9; master.connect(ctx.destination);
+    const master = ctx.createGain(); master.gain.value = 0.9;
+    const limiter = ctx.createDynamicsCompressor(), post = ctx.createGain();   // 큰 소리가 겹쳐도 찢어지지 않게 꼭대기만 살짝 눌러요
+    limiter.threshold.value = -3; limiter.knee.value = 3; limiter.ratio.value = 12; limiter.attack.value = 0.003; limiter.release.value = 0.15;
+    post.gain.value = 0.83;   // 리미터가 저절로 키우는 만큼 도로 줄여요 (작은 소리 크기는 그대로)
+    master.connect(limiter); limiter.connect(post); post.connect(ctx.destination);
     const white = makeNoiseBuffer(ctx, "white"), brown = makeNoiseBuffer(ctx, "brown");
 
     const fireGain = ctx.createGain(); fireGain.gain.value = 0; fireGain.connect(master);
-    const fireLP = filter(ctx, "lowpass", 420);
-    loopNoise(ctx, brown).connect(fireLP); fireLP.connect(fireGain);
+    const fireLP = filter(ctx, "lowpass", 400);   // 낮게 '우르르': 크기와 밝기는 updateAudio가 불꽃처럼 흔들어요
+    const fireA = loopNoise(ctx, brown), fireB = loopNoise(ctx, brown);
+    fireB.playbackRate.value = 0.77;              // 2초짜리 잡음 둘을 다른 빠르기로 겹쳐요 (같은 무늬가 되풀이되는 티가 안 나게)
+    fireA.connect(fireLP); fireB.connect(fireLP); fireLP.connect(fireGain);
+    const fireAir = ctx.createGain(); fireAir.gain.value = 0; fireAir.connect(master);   // 불이 공기를 빨아들이는 '쉬-'
+    const airBP = filter(ctx, "bandpass", 1500), airSrc = loopNoise(ctx, white);
+    airBP.Q.value = 0.5; airSrc.playbackRate.value = 0.9;
+    airSrc.connect(airBP); airBP.connect(fireAir);
 
     const rainGain = ctx.createGain(); rainGain.gain.value = 0; rainGain.connect(master);
     const rainHP = filter(ctx, "highpass", 500), rainLP = filter(ctx, "lowpass", 6500);
@@ -2601,21 +2687,25 @@
     springBP.Q.value = 0.6;
     loopNoise(ctx, white).connect(springBP); springBP.connect(springLP); springLP.connect(springGain);
 
-    audio = { ctx: ctx, master: master, white: white, fireGain: fireGain, rainGain: rainGain, wavesGain: wavesGain, springGain: springGain, blupIn: 0, tickIn: 0, tickAlt: false, on: true };
+    audio = { ctx: ctx, master: master, white: white, fireGain: fireGain, fireLP: fireLP, fireAir: fireAir, crk: { rate: 2, left: 0 }, rainGain: rainGain, wavesGain: wavesGain, springGain: springGain, blupIn: 0, tickIn: 0, tickAlt: false, on: true };
     console.log("[🔊 audio] 소리 엔진 시작 -> 샘플레이트:", ctx.sampleRate, "| 상태:", ctx.state);
     updateSoundButton();
   }
-  function crackle(vol) {
-    const ctx = audio.ctx, t = ctx.currentTime;
-    const src = ctx.createBufferSource(); src.buffer = audio.white;
-    const hp = filter(ctx, "highpass", 1200 + Math.random() * 2600);
-    const g = ctx.createGain();
-    const dur = 0.015 + Math.random() * 0.05;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(Math.max(0.001, vol * (0.25 + Math.random() * 0.6)), t + 0.003);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(hp); hp.connect(g); g.connect(audio.master);
-    src.start(t, Math.random() * 1.8, dur + 0.02);
+  function crackle(vol, delay, big) {   // 장작 '타닥': 대부분 아주 짧은 '틱', 가끔 나무가 울리는 '탁', 드물게 굵은 '퍽' (big = 장작이 터질 때)
+    const ctx = audio.ctx, t = ctx.currentTime + (delay || 0), r = big ? 1 : Math.random();
+    const amp = vol * (big ? 0.75 + Math.random() * 0.3 : 0.05 + 0.75 * Math.pow(Math.random(), 3));   // 대부분 작고 가끔만 커요 (다 비슷하면 가짜 같아요)
+    let out = audio.master;
+    if (ctx.createStereoPanner) { out = ctx.createStereoPanner(); out.pan.value = (Math.random() * 2 - 1) * 0.6; out.connect(audio.master); }   // 왼쪽·오른쪽 여기저기서
+    if (r < 0.7) {
+      nb(t, 0.004 + Math.random() * 0.012, "bandpass", 2200 + Math.random() * 5000, 0, 0.7 + Math.random() * 1.5, amp * 1.3, 0.0005, out);
+    } else if (r < 0.94) {
+      nb(t, 0.005 + Math.random() * 0.008, "highpass", 2400 + Math.random() * 2000, 0, 0.7, amp, 0.0005, out);
+      nb(t, 0.03 + Math.random() * 0.05, "bandpass", 500 + Math.random() * 1100, 0, 3 + Math.random() * 5, amp * 1.6, 0.001, out);
+    } else {
+      nb(t, 0.008, "highpass", 1800, 0, 0.7, amp * 1.1, 0.0005, out);
+      nb(t, 0.09 + Math.random() * 0.08, "bandpass", 150 + Math.random() * 200, 0, 2.2, amp * 2.2, 0.002, out);
+      nb(t + 0.004, 0.05, "bandpass", 700 + Math.random() * 500, 0, 2.5, amp * 0.9, 0.001, out);
+    }
   }
   function playClack() {
     if (!audio || !audio.on) return;
@@ -2639,7 +2729,7 @@
     osc.start(t); osc.stop(t + 0.13);
   }
   // ---- 🍡 먹는 소리·가루 소리 (전부 합성: 잡음 조각 + 짧은 음) ----
-  function nb(t0, dur, type, f0, f1, q, vol, atk) {   // 잡음 한 토막: 필터를 f0 -> f1 로 움직이며
+  function nb(t0, dur, type, f0, f1, q, vol, atk, dest) {   // 잡음 한 토막: 필터를 f0 -> f1 로 움직이며
     const ctx = audio.ctx, src = ctx.createBufferSource(); src.buffer = audio.white;
     const bf = ctx.createBiquadFilter(); bf.type = type; bf.Q.value = q;
     bf.frequency.setValueAtTime(f0, t0);
@@ -2648,8 +2738,19 @@
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol), t0 + a);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    src.connect(bf); bf.connect(g); g.connect(audio.master);
+    src.connect(bf); bf.connect(g); g.connect(dest || audio.master);
     src.start(t0, Math.random() * 1.7, dur + 0.03);
+  }
+  function nenv(t0, type, f0, f1, q, pts) {   // 잡음에 직선 봉투: pts = [[시각, 크기], ...] (0에서 시작). nb는 금방 꺼져서, 길게 들려야 하는 소리는 이걸 써요
+    const ctx = audio.ctx, src = ctx.createBufferSource(); src.buffer = audio.white; src.loop = true;
+    const bf = ctx.createBiquadFilter(), end = pts[pts.length - 1][0]; bf.type = type; bf.Q.value = q;
+    bf.frequency.setValueAtTime(f0, t0);
+    if (f1 && f1 !== f0) bf.frequency.exponentialRampToValueAtTime(f1, t0 + end);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t0);
+    pts.forEach(function (q2) { g.gain.linearRampToValueAtTime(q2[1], t0 + q2[0]); });
+    src.connect(bf); bf.connect(g); g.connect(audio.master);
+    src.start(t0, Math.random() * 1.7); src.stop(t0 + end + 0.05);
   }
   function tone(t0, dur, type, f0, f1, vol, atk) {   // 짧은 음 하나: 높이를 f0 -> f1 로
     const ctx = audio.ctx, osc = ctx.createOscillator(); osc.type = type;
@@ -2663,14 +2764,14 @@
     osc.start(t0); osc.stop(t0 + dur + 0.02);
   }
   function chewAt(t0, k) {   // 쫀득: 입을 다물며 '꾹' + 말랑하게 눌리는 '쭈' + 끈적하게 떨어지는 '쩝'
-    tone(t0, 0.13, "sine", 125, 70, 0.16 * k, 0.012);
-    nb(t0 + 0.01, 0.2, "bandpass", 650, 260, 3.5, 0.22 * k, 0.03);
-    nb(t0 + 0.17, 0.035, "bandpass", 1900, 1500, 2.5, 0.09 * k);
+    tone(t0, 0.13, "sine", 125, 70, 0.42 * k, 0.012);
+    nenv(t0 + 0.01, "bandpass", 650, 270, 3.5, [[0.03, 0.9 * k], [0.1, 0.55 * k], [0.2, 0]]);
+    nb(t0 + 0.17, 0.05, "bandpass", 1900, 1500, 2.5, 0.2 * k);
   }
   function crunchAt(t0, k, lo, hi, grains, spread) {   // 바삭: 아주 짧은 '탁' 수십 개가 한꺼번에 (앞쪽에 몰리게)
     for (let i = 0; i < grains; i++) {
       const d = Math.pow(Math.random(), 1.6) * spread;
-      nb(t0 + d, 0.004 + Math.random() * 0.012, "bandpass", lo + Math.random() * (hi - lo), 0, 1.4, k * (0.08 + Math.random() * 0.28) * (1 - 0.6 * d / spread), 0.001);
+      nb(t0 + d, 0.006 + Math.random() * 0.02, "bandpass", lo + Math.random() * (hi - lo), 0, 1.4, k * (0.25 + Math.random() * 0.7) * (1 - 0.6 * d / spread), 0.001);
     }
   }
   function groanAt(t0) {   // 앓는 소리 '으으…': 톱니파 목소리를 'ㅡ' 모음 울림(포먼트) 세 개로 걸러요. 두 번째 '으'는 길게 내려가요
@@ -2694,18 +2795,28 @@
     osc.start(t0); vib.start(t0); osc.stop(t0 + 1.6); vib.stop(t0 + 1.6);
   }
   const BURNT_STYLE = "cough";   // 탄 마시멜로 먹을 때 (도윤 선택: cough): "groan" 으으 / "cough" 콜록 + 재 연기 / "both" 둘 다
-  function coughAt(t0) {   // '콜록콜록': 목에서 터지는 잡음 + 짧은 'ㅗ' 목소리, 두 번
+  function coughAt(t0) {   // '콜록, 콜록': 목이 '컥' 터지는 숨 -> 가슴이 울리는 낮은 소리 -> 짧은 목소리. 불 소리에 안 묻히게 크고 길게
     const ctx = audio.ctx;
-    [0, 0.17, 0.5, 0.66].forEach(function (d, i) {
-      const k = (i % 2 === 0 ? 1 : 0.6) * (i < 2 ? 1 : 0.75), t = t0 + d;
-      nb(t, 0.13, "bandpass", 1100, 600, 1.2, 0.32 * k, 0.006);
-      const osc = ctx.createOscillator(), env = ctx.createGain();
-      osc.type = "sawtooth"; osc.frequency.setValueAtTime(230, t); osc.frequency.exponentialRampToValueAtTime(170, t + 0.11);
-      env.gain.setValueAtTime(0.0001, t); env.gain.exponentialRampToValueAtTime(0.3 * k, t + 0.012); env.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    [[0, 1], [0.27, 0.72], [0.76, 0.88], [1.02, 0.6]].forEach(function (c) {
+      const t = t0 + c[0], k = c[1];
+      nenv(t, "bandpass", 1700, 800, 0.6, [[0.005, 1.3 * k], [0.05, 0.8 * k], [0.15, 0.36 * k], [0.27, 0]]);
+      nenv(t, "lowpass", 420, 200, 0.9, [[0.008, 1.0 * k], [0.08, 0.4 * k], [0.2, 0]]);
+      const osc = ctx.createOscillator(), env = ctx.createGain(), f = osc.frequency;
+      osc.type = "sawtooth"; f.setValueAtTime(215 + 20 * k, t); f.exponentialRampToValueAtTime(125, t + 0.22);
+      env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(0.9 * k, t + 0.025); env.gain.linearRampToValueAtTime(0.6 * k, t + 0.1); env.gain.linearRampToValueAtTime(0, t + 0.22);
       osc.connect(env);
-      [[520, 3, 1], [900, 5, 0.5]].forEach(function (fm) { const bp = filter(ctx, "bandpass", fm[0]), g = ctx.createGain(); bp.Q.value = fm[1]; g.gain.value = fm[2] * 0.5; env.connect(bp); bp.connect(g); g.connect(audio.master); });
-      osc.start(t); osc.stop(t + 0.14);
+      [[620, 3, 1], [1150, 4, 0.7], [2500, 5, 0.25]].forEach(function (fm) { const bp = filter(ctx, "bandpass", fm[0]), g = ctx.createGain(); bp.Q.value = fm[1]; g.gain.value = fm[2]; env.connect(bp); bp.connect(g); g.connect(audio.master); });
+      osc.start(t); osc.stop(t + 0.25);
     });
+  }
+  function playBlow() {   // '후~': 불붙은 마시멜로를 입으로 불어 끄는 숨소리 + 불꽃이 '푸' 꺼지는 소리
+    if (!audio || !audio.on) { console.log("[🔊 blow] 소리 꺼짐 -> 안 남"); return; }
+    const t = audio.ctx.currentTime + 0.01;
+    nenv(t, "bandpass", 520, 380, 1.1, [[0.07, 1.3], [0.3, 1.1], [0.55, 0.75], [0.8, 0]]);    // 'ㅜ' 입 모양 울림
+    nenv(t, "bandpass", 1500, 1100, 0.9, [[0.05, 0.6], [0.5, 0.4], [0.75, 0]]);                // 바람 새는 소리
+    nenv(t, "highpass", 3800, 3000, 0.7, [[0.04, 0.16], [0.45, 0.11], [0.7, 0]]);                // 숨결
+    nenv(t + 0.1, "lowpass", 230, 120, 0.8, [[0.03, 0.8], [0.28, 0]]);                          // 불꽃이 꺼지며 '푸'
+    console.log("[🔊 blow] 후~ 부는 소리");
   }
   function playEat(kind) {
     if (!audio || !audio.on) { console.log("[🔊 eat] 소리 꺼짐 -> 안 남:", kind); return; }
@@ -2720,7 +2831,7 @@
       crunchAt(t + 0.8, 0.5, 1800, 5000, 12, 0.08); chewAt(t + 0.9, 0.5);
     } else {                        // 탄 것: 숯이 '푸석' 부서지고 -> '으으…'
       crunchAt(t, 1.1, 900, 3000, 40, 0.16);
-      nb(t + 0.02, 0.22, "lowpass", 900, 300, 0.7, 0.12, 0.02);
+      nenv(t + 0.02, "lowpass", 900, 300, 0.7, [[0.02, 0.3], [0.22, 0]]);
       if (BURNT_STYLE !== "cough") groanAt(t + 0.55);
       if (BURNT_STYLE !== "groan") coughAt(t + (BURNT_STYLE === "both" ? 2.1 : 0.55));
     }
@@ -2729,15 +2840,18 @@
   function playSprinkle() {   // 가루 뿌리는 '사락' + 톡톡 두 번
     if (!audio || !audio.on) return;
     const t = audio.ctx.currentTime;
-    nb(t, 0.28, "highpass", 4200, 0, 0.7, 0.07, 0.02);
-    nb(t + 0.3, 0.08, "highpass", 4800, 0, 0.7, 0.035);
-    nb(t + 0.48, 0.08, "highpass", 4800, 0, 0.7, 0.03);
+    nenv(t, "highpass", 4200, 0, 0.7, [[0.03, 0.2], [0.12, 0.1], [0.28, 0]]);
+    nb(t + 0.3, 0.1, "highpass", 4800, 0, 0.7, 0.12);
+    nb(t + 0.48, 0.1, "highpass", 4800, 0, 0.7, 0.1);
   }
-  function playFlare() {   // 가루가 불에 닿아 '화르륵' + 타닥타닥
+  function playFlare() {   // 가루가 불에 닿아 불이 '휙!' 커지는 소리: 아래에서 위로 훑는 바람 + 낮은 '훅' + 뒤따르는 타닥
     if (!audio || !audio.on) return;
-    const t = audio.ctx.currentTime;
-    nb(t, 0.7, "bandpass", 500, 1600, 0.8, 0.22, 0.08);
-    for (let i = 0; i < 9; i++) nb(t + Math.random() * 0.5, 0.01 + Math.random() * 0.03, "highpass", 1500 + Math.random() * 2500, 0, 0.7, 0.1 + Math.random() * 0.2, 0.002);
+    const t = audio.ctx.currentTime + 0.01;
+    nenv(t, "bandpass", 320, 2400, 1.3, [[0.04, 0.4], [0.15, 1.5], [0.32, 0.7], [0.9, 0]]);   // '휘익' 올라가는 바람
+    nenv(t, "lowpass", 300, 120, 0.9, [[0.05, 1.3], [0.3, 0.5], [0.75, 0]]);                   // '훅' 하는 낮은 울림
+    nenv(t + 0.03, "highpass", 5200, 0, 0.7, [[0.06, 0.1], [0.5, 0]]);                          // 가루가 타는 '치익'
+    for (let i = 0; i < 8; i++) crackle(0.75, 0.12 + Math.random() * 0.8);
+    console.log("[🔊 flare] 불이 휙 커지는 소리");
   }
   function playChime(freq, vol) {   // 풍경: 맑은 소리 하나 + 높은 배음 둘이 길게 사라져요
     if (!audio || !audio.on) return;
@@ -2796,10 +2910,29 @@
     const vFire = Math.pow(clamp(1 - (Math.hypot(p.x - FIRE.x, p.z - FIRE.z) - 3) / 24, 0, 1), 1.6);
     const vRain = Math.pow(clamp(1 - (Math.hypot(p.x + D, p.z) - 12) / 24, 0, 1), 1.4);
     const vWaves = Math.pow(clamp(1 - (Math.max(0, SEA_Z - p.z) - 2) / 24, 0, 1), 1.4);   // 파도 소리는 바다에서 26칸까지만 (온천·풍경 나무에서는 안 들림)
-    audio.fireGain.gain.setTargetAtTime(vFire * 0.55, now, 0.25);
+    // 불 소리도 불빛처럼 일렁여요: 느린 물결 몇 개를 겹치고, 장작이 터지거나 원소를 넣으면 훅 커져요
+    const sway = 0.82 + 0.13 * Math.sin(now * 2.9) * Math.sin(now * 0.83 + 1) + 0.09 * Math.sin(now * 6.7 + 0.5) + 0.06 * Math.sin(now * 11.3 + Math.sin(now * 1.7) * 2) + fire.boost * 0.2 + fire.surge * 0.9;
+    audio.fireGain.gain.setTargetAtTime(vFire * 0.3 * sway, now, 0.06);
+    audio.fireLP.frequency.setTargetAtTime(280 + 150 * sway + fire.surge * 500, now, 0.08);
+    audio.fireAir.gain.setTargetAtTime(vFire * (0.012 + 0.012 * Math.sin(now * 1.3 + 2) * Math.sin(now * 3.1) + fire.surge * 0.05), now, 0.1);
     audio.rainGain.gain.setTargetAtTime(vRain * 0.32, now, 0.25);
     audio.wavesGain.gain.setTargetAtTime(vWaves * 0.6, now, 0.25);
-    if (audio.on && vFire > 0.05 && Math.random() < dt * 9 * vFire) crackle(vFire * 0.5);
+    // 타닥: 고르게 말고 몰아서 — 잠잠하다가, 보통이다가, 가끔 우르르 (진짜 장작은 한꺼번에 튀다가 쉬어요)
+    const ck = audio.crk;
+    ck.left -= dt;
+    if (ck.left <= 0) {
+      const r = Math.random();
+      if (r < 0.4) { ck.rate = 0.4 + Math.random() * 1.6; ck.left = 0.8 + Math.random() * 2.5; }
+      else if (r < 0.85) { ck.rate = 3 + Math.random() * 5; ck.left = 0.6 + Math.random() * 2; }
+      else { ck.rate = 12 + Math.random() * 14; ck.left = 0.25 + Math.random() * 0.6; }
+    }
+    if (audio.on && vFire > 0.05) {
+      for (let acc = dt * ck.rate * vFire; Math.random() < acc; acc -= 1) {
+        const d = Math.random() * dt;   // 프레임 사이 아무 때나 (화면 박자에 맞춰 나면 기계 같아요)
+        crackle(vFire * 0.8, d);
+        if (Math.random() < 0.22) for (let n = 1 + Math.floor(Math.random() * 3); n > 0; n--) crackle(vFire * 0.6, d + 0.015 + Math.random() * 0.09 * n);   // 연달아 타다닥
+      }
+    }
     const vSpring = Math.pow(clamp(1 - (Math.hypot(p.x - spring.x, p.z - spring.z) - 5) / 18, 0, 1), 1.4);
     audio.springGain.gain.setTargetAtTime(vSpring * 0.09, now, 0.25);
     audio.blupIn -= dt;
@@ -2807,7 +2940,7 @@
     const vLib = clamp(1 - (Math.hypot(p.x - library.x, p.z - library.z) - 7) / 10, 0, 1);
     audio.tickIn -= dt;
     if (audio.on && vLib > 0.05 && audio.tickIn <= 0) { tick(vLib); audio.tickIn = 1; }
-    if (fire.popped && audio.on && vFire > 0.05) { crackle(vFire); crackle(vFire * 0.7); }   // 장작이 터질 때 '탁' 
+    if (fire.popped && audio.on && vFire > 0.05) { crackle(vFire * 0.9, 0, true); crackle(vFire * 0.6, 0.02 + Math.random() * 0.05); crackle(vFire * 0.5, 0.06 + Math.random() * 0.1); }   // 장작이 터질 때 '퍽' + 타닥
   }
   function setSound(on) {
     if (!audio) { startAudio(); return; }
@@ -2832,8 +2965,13 @@
   const swatchBox = document.getElementById("swatches");
   const accBox = document.getElementById("accs");
   const btnEnter = document.getElementById("btnEnter");
+  const howBox = document.getElementById("howBox"), roomHint = document.getElementById("roomHint"), codeInput = document.getElementById("codeInput");
+  const waySolo = document.getElementById("waySolo"), wayRandom = document.getElementById("wayRandom"), wayMake = document.getElementById("wayMake"), wayJoin = document.getElementById("wayJoin");
+  const btnRooms = document.getElementById("btnRooms");
+  const ROOM_HINT = FIREBASE_DB_URL ? "" : "지금은 시험 단계라, '같이 있기'는 같은 브라우저의 다른 탭끼리만 만나요.";
   const btnSound = document.getElementById("btnSound");
   const btnZen = document.getElementById("btnZen");
+  const btnAir = document.getElementById("btnAir");
   const btnEdit = document.getElementById("btnEdit");
   const zenExit = document.getElementById("zenExit");
   const btnSit = document.getElementById("btnSit");
@@ -2947,7 +3085,9 @@
     panel.hidden = false;
     body.classList.add("customizing");
     nametag.hidden = true;
-    btnEnter.textContent = first ? "들어가기" : "다 꾸몄어요";
+    howBox.hidden = !first; btnEnter.hidden = first; btnRooms.hidden = first;   // 처음엔 '어떻게 들어갈까요?', 꾸미기로 다시 열면 '다 꾸몄어요' + 방 바꾸기
+    roomHint.textContent = ROOM_HINT;
+    if (!first) btnRooms.textContent = "방 바꾸기 (지금: " + roomLabel() + ")";
     player.heading = 0;
     keys.clear();
     console.log("[🧥 panel] 꾸미기 열림 -> 처음:", !!first);
@@ -2966,14 +3106,53 @@
     console.log("[🚪 enter] 세계로 들어감 -> 이름:", look.name, "| 위치:", player.pos.x.toFixed(1), player.pos.z.toFixed(1));
   }
   btnEnter.addEventListener("click", function () { enterWorld(true); });
+  // 들어가는 방법: 혼자 / 아무 방이나 / 방 만들기 / 코드로 들어가기
+  btnRooms.addEventListener("click", function () { howBox.hidden = false; btnRooms.hidden = true; console.log("[🚪 room] 방 바꾸기 열림 -> 지금:", roomLabel()); });
+  waySolo.addEventListener("click", function () {
+    leaveRoom("혼자 있기 고름"); enterWorld(true);
+    note("🌙 혼자 있어요. 꾸미기에서 언제든 방을 바꿀 수 있어요", 4500);
+  });
+  wayRandom.addEventListener("click", function () { joinRandom("아무 방이나 고름"); enterWorld(true); });
+  wayMake.addEventListener("click", function () {
+    const code = makeRoomCode();
+    joinRoom("prv", code, "방 만들기"); enterWorld(true);
+    note("🏠 방을 만들었어요 · 코드 " + code + " · 친구에게 알려 주세요 (오른쪽 위 사람 수를 누르면 복사)", 9000);
+  });
+  function joinByCode() {
+    const code = cleanRoomCode(codeInput.value);
+    if (code.length !== 4) {
+      roomHint.textContent = "방 코드는 글자·숫자 4개예요. 친구가 알려 준 코드를 넣어 주세요.";
+      codeInput.focus();
+      console.log("[🚪 room] 코드가 4글자가 아님 -> 입력:", JSON.stringify(codeInput.value));
+      return;
+    }
+    joinRoom("prv", code, "코드 입력"); enterWorld(true);
+    note("🚪 방 " + code + "에 들어왔어요", 5000);
+  }
+  wayJoin.addEventListener("click", joinByCode);
+  codeInput.addEventListener("keydown", function (e) { if (e.key === "Enter") joinByCode(); });
+  codeInput.addEventListener("input", function () { codeInput.value = cleanRoomCode(codeInput.value); });
   btnEdit.addEventListener("click", function () { openPanel(false); });
   btnSound.addEventListener("click", function () { setSound(!(audio && audio.on)); });
   btnZen.addEventListener("click", toggleZen);
+  btnAir.addEventListener("click", function () { toggleAerial("버튼"); });
   zenExit.addEventListener("click", toggleZen);
   btnSit.addEventListener("click", toggleSeat);
 
+  function toggleAerial(why) {   // 🚁 공중샷: 하늘에서 내려다봐요 (눈밭에 발자국으로 그린 그림 보기)
+    if (state.mode !== "play") return;
+    state.aerial = !state.aerial;
+    if (state.aerial) {
+      if (player.seat) standUp("공중샷");
+      if (state.zen) toggleZen();
+      note("🚁 공중샷 · 걸으면 눈밭에 발자국 그림이 남아요 · 휠로 높이 · V로 돌아오기", 5500);
+    }
+    btnAir.setAttribute("aria-pressed", state.aerial ? "true" : "false");
+    console.log("[🚁 aerial] 공중샷", state.aerial ? "켬" : "끔", "| 높이:", cam.air.toFixed(0), "| 이유:", why);
+  }
   function toggleZen() {
     state.zen = !state.zen;
+    if (state.zen && state.aerial) toggleAerial("멍 모드");
     body.classList.toggle("zen", state.zen);
     zenExit.hidden = !state.zen;
     cam.zenYaw = 0;
@@ -3064,7 +3243,9 @@
   const EMOJIS = ["👋", "😊", "😂", "❤️", "😴"];
   const ACC_IDS = ACCESSORIES.map(function (a) { return a.id; });
   const others = {};   // 다른 사람 번호 -> 눈사람과 상태
-  const net = { mode: "off", online: false, send: null, lastSent: -1e9, lastKey: "", emoji: "", emojiKey: 0, sentCount: 0, logAt: 0 };
+  const net = { mode: "off", online: false, send: null, lastSent: -1e9, lastKey: "", emoji: "", emojiKey: 0, sentCount: 0, logAt: 0,
+    kind: "solo", room: "", leave: null, token: 0, me: null };   // kind: "solo" 혼자 | "pub" 랜덤 방 | "prv" 코드 방, room: 방 코드 4글자
+  const ROOM_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789", ROOM_CAP = 12;   // 헷갈리는 글자(I·L·O·0·1)는 빼요. 랜덤 방은 12명까지
   const peopleCount = document.getElementById("peopleCount");
   const peopleMode = document.getElementById("peopleMode");
   const peopleChip = document.getElementById("peopleChip");
@@ -3174,12 +3355,24 @@
     console.log("[👥 leave] 다른 사람 나감 -> 번호:", id, "| 이름:", o.n, "| 이유:", why);
     updatePeople();
   }
+  function roomLabel() { return net.kind === "pub" ? (net.room ? "랜덤 방" : "방 찾는 중") : net.kind === "prv" ? "방 " + net.room : "혼자"; }
   function updatePeople() {
     peopleCount.textContent = String(1 + Object.keys(others).length);
-    const label = net.mode === "firebase" ? (net.online ? "" : "연결 중") : net.mode === "local" ? "탭 시험" : "혼자";
-    peopleMode.textContent = label;
-    peopleChip.title = net.mode === "firebase" ? "지금 이 세계에 있는 사람 수" : net.mode === "local" ? "탭 시험 모드: 이 브라우저의 다른 탭에 있는 눈사람만 보여요" : "혼자 모드";
+    const link = net.kind === "solo" || !net.room ? "" : net.mode === "firebase" ? (net.online ? "" : " · 연결 중") : net.mode === "local" ? " · 탭 시험" : " · 연결 안 됨";
+    peopleMode.textContent = roomLabel() + link;
+    peopleChip.classList.toggle("copyable", net.kind === "prv");
+    peopleChip.title = net.kind === "solo" ? "혼자 있어요. 꾸미기 → 방 바꾸기에서 같이 있을 수 있어요"
+      : (net.kind === "prv" ? "방 코드 " + net.room + " (누르면 복사). " : "아무나 들어오는 랜덤 방. ") + (net.mode === "local" ? "탭 시험 모드: 이 브라우저의 다른 탭에 있는 눈사람만 보여요" : "지금 이 방에 있는 사람 수");
   }
+  peopleChip.addEventListener("click", function () {   // 코드 방: 사람 수를 누르면 방 코드를 복사해요
+    if (net.kind !== "prv") return;
+    const code = net.room, done = function (ok) {
+      note(ok ? "📋 방 코드 " + code + " 복사했어요. 친구에게 알려 주세요" : "🏠 방 코드는 " + code + " 이에요", 5000);
+      console.log("[🚪 room] 방 코드 보여줌 ->", code, "| 복사:", ok);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(function () { done(true); }, function () { done(false); });
+    else done(false);
+  });
 
   function myState() {
     const p = player.pos, r = function (v) { return Math.round(v * 100) / 100; };
@@ -3213,27 +3406,78 @@
     emojiBar.appendChild(b);
   });
 
-  // ---- 연결 방식 1: 탭 시험 모드 (같은 브라우저의 탭끼리 BroadcastChannel로 주고받기) ----
-  function startLocalNet(why) {
+  // ---- 방: 혼자 / 랜덤 방(pub) / 코드 방(prv) ----
+  function makeRoomCode() { let c = ""; for (let i = 0; i < 4; i++) c += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)]; return c; }
+  function cleanRoomCode(v) { return String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4); }
+  function leaveRoom(why) {   // 지금 방에서 나와 혼자가 돼요 (다른 사람 눈사람도 치워요)
+    if (net.room) console.log("[🚪 room] 방 나감 -> 종류:", net.kind, "| 코드:", net.room, "| 이유:", why);
+    if (net.leave) { try { net.leave(); } catch (err) { console.log("[🚪 room] 나가는 중 오류(무시) ->", err && err.message); } }
+    net.leave = null; net.send = null; net.me = null; net.token++;
+    Object.keys(others).forEach(function (id) { onRemoteGone(id, "방을 나옴"); });
+    net.kind = "solo"; net.room = ""; net.mode = "off";
+    updatePeople();
+  }
+  function joinRoom(kind, code, why) {   // kind: "pub" 랜덤 방 | "prv" 코드 방
+    leaveRoom("다른 방으로 감");
+    net.kind = kind; net.room = code;
+    console.log("[🚪 room] 방 들어감 -> 종류:", kind, "| 코드:", code, "| 이유:", why, "| 방식:", FIREBASE_DB_URL ? "firebase" : "탭 시험");
+    if (FIREBASE_DB_URL) joinFirebaseRoom(kind, code); else joinLocalRoom(kind, code);
+    net.lastSent = -1e9;
+    updatePeople();
+  }
+  function joinRandom(why) {   // 사람이 있는 랜덤 방 가운데 가장 북적이는(자리가 남은) 방으로, 없으면 새 방을 열어요
+    leaveRoom("랜덤 방 찾기");
+    net.kind = "pub";
+    const token = net.token;
+    updatePeople();
+    const pick = function (rooms) {   // rooms: { 방 코드: 사람 수 }
+      if (token !== net.token) return;   // 찾는 사이에 다른 걸 골랐어요
+      let best = "", bestN = 0;
+      Object.keys(rooms).forEach(function (c) { const n = rooms[c]; if (cleanRoomCode(c) === c && c.length === 4 && n > bestN && n < ROOM_CAP) { best = c; bestN = n; } });
+      console.log("[🎲 random] 랜덤 방 고르기 -> 열린 방:", JSON.stringify(rooms), "| 고른 방:", best || "(없어서 새로 엶)", "| 그 방 사람:", bestN);
+      joinRoom("pub", best || makeRoomCode(), why);
+      note(best ? "🎲 사람이 있는 방에 들어왔어요 (" + bestN + "명)" : "🎲 열린 방이 없어서 새 방을 열었어요. 누가 오면 여기로 와요", 5500);
+    };
+    if (FIREBASE_DB_URL) firebaseRooms(pick); else localRooms(pick);
+  }
+
+  // ---- 연결 방식 1: 탭 시험 모드 (같은 브라우저의 탭끼리 BroadcastChannel로 주고받기. 방마다 채널이 따로예요) ----
+  let lobby = null, lobbyWait = null;   // lobby: 랜덤 방을 찾을 때 "지금 어느 방에 몇 명?" 을 묻고 답하는 채널
+  function openLobby() {
     try {
-      const bc = new BroadcastChannel("softplace-v1");
+      lobby = new BroadcastChannel("softplace-v2-lobby");
+      lobby.onmessage = function (ev) {
+        const m = ev.data || {};
+        if (m.type === "who" && net.kind === "pub" && net.room) lobby.postMessage({ type: "here", room: net.room, n: 1 + Object.keys(others).length });
+        else if (m.type === "here" && lobbyWait && typeof m.room === "string") lobbyWait[m.room] = Math.max(lobbyWait[m.room] || 0, Number(m.n) || 1);
+      };
+    } catch (err) { lobby = null; console.log("[📡 net] 탭끼리 주고받기가 막혀 있어요 ->", err && err.message); }
+  }
+  function localRooms(cb) {
+    if (!lobby) { cb({}); return; }
+    lobbyWait = {};
+    lobby.postMessage({ type: "who" });
+    setTimeout(function () { const found = lobbyWait; lobbyWait = null; cb(found); }, 350);   // 0.35초 동안 온 대답만 모아요
+  }
+  function joinLocalRoom(kind, code) {
+    try {
+      const bc = new BroadcastChannel("softplace-v2-" + kind + "-" + code);
       bc.onmessage = function (ev) {
         const m = ev.data || {};
         if (m.id === MY_ID) return;
         if (m.type === "state") onRemote(m.id, m.data);
-        else if (m.type === "bye") onRemoteGone(m.id, "탭 닫음");
-        else if (m.type === "hello") net.lastSent = -1e9;   // 새로 연 탭에 내 모습을 바로 보여주기
+        else if (m.type === "bye") onRemoteGone(m.id, "방을 나감");
+        else if (m.type === "hello") net.lastSent = -1e9;   // 새로 들어온 탭에 내 모습을 바로 보여주기
       };
       net.send = function (d) { bc.postMessage({ type: "state", id: MY_ID, data: d }); };
-      window.addEventListener("pagehide", function () { bc.postMessage({ type: "bye", id: MY_ID }); });
+      net.leave = function () { bc.postMessage({ type: "bye", id: MY_ID }); bc.close(); };
       bc.postMessage({ type: "hello", id: MY_ID });
       net.mode = "local";
-      console.log("[📡 net] 탭 시험 모드 시작 -> 이유:", why, "| 내 번호:", MY_ID);
+      console.log("[📡 net] 탭 시험 모드로 방에 들어감 -> 채널:", kind + "-" + code, "| 내 번호:", MY_ID);
     } catch (err) {
       net.mode = "off";
-      console.log("[📡 net] 탭 시험 모드도 못 켬(이 브라우저는 막혀 있어요) -> 혼자 모드:", err && err.message);
+      console.log("[📡 net] 탭 시험 모드도 못 켬(이 브라우저는 막혀 있어요) -> 혼자처럼 보여요:", err && err.message);
     }
-    updatePeople();
   }
   // ---- 연결 방식 2: Firebase Realtime Database (진짜로 다른 사람과 연결) ----
   function loadScript(src) {
@@ -3245,41 +3489,63 @@
       document.head.appendChild(sc);
     });
   }
-  function startFirebaseNet() {
-    const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
-    console.log("[📡 net] Firebase 연결 시작 -> 주소:", FIREBASE_DB_URL);
-    loadScript(SDK + "firebase-app-compat.js").then(function () {
-      return loadScript(SDK + "firebase-database-compat.js");
-    }).then(function () {
-      firebase.initializeApp({ databaseURL: FIREBASE_DB_URL });
-      const db = firebase.database(), list = db.ref("players"), me = list.child(MY_ID);
+  let fbReady = null;   // Firebase는 처음 방에 들어갈 때 한 번만 불러와요
+  function ensureFirebase() {
+    if (!fbReady) {
+      const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
+      console.log("[📡 net] Firebase 연결 시작 -> 주소:", FIREBASE_DB_URL);
+      fbReady = loadScript(SDK + "firebase-app-compat.js").then(function () {
+        return loadScript(SDK + "firebase-database-compat.js");
+      }).then(function () {
+        firebase.initializeApp({ databaseURL: FIREBASE_DB_URL });
+        const db = firebase.database();
+        db.ref(".info/connected").on("value", function (snap) {
+          net.online = !!snap.val();
+          if (net.online && net.me) { net.me.onDisconnect().remove(); net.lastSent = -1e9; }   // 창을 닫거나 인터넷이 끊기면 서버가 내 눈사람을 지워줘요
+          console.log("[📡 net] Firebase 연결 상태 ->", net.online ? "연결됨" : "끊김");
+          updatePeople();
+        });
+        return db;
+      });
+    }
+    return fbReady;
+  }
+  function joinFirebaseRoom(kind, code) {
+    const token = net.token;
+    net.mode = "firebase";
+    ensureFirebase().then(function (db) {
+      if (token !== net.token) return;   // 연결되는 사이에 다른 방으로 바꿨어요
+      const list = db.ref(kind + "/" + code), me = list.child(MY_ID);
       const got = function (snap) { onRemote(snap.key, snap.val()); };
       list.on("child_added", got);
       list.on("child_changed", got);
       list.on("child_removed", function (snap) { onRemoteGone(snap.key, "나감"); });
-      db.ref(".info/connected").on("value", function (snap) {
-        net.online = !!snap.val();
-        if (net.online) {
-          me.onDisconnect().remove();   // 창을 닫거나 인터넷이 끊기면 서버가 내 눈사람을 지워줘요
-          net.lastSent = -1e9;
-        }
-        console.log("[📡 net] Firebase 연결 상태 ->", net.online ? "연결됨" : "끊김");
-        updatePeople();
-      });
+      me.onDisconnect().remove();
+      net.me = me;
       net.send = function (d) {
         d.t = firebase.database.ServerValue.TIMESTAMP;
         me.set(d).catch(function (err) { console.log("[📡 net] 보내기 거절됨(규칙 확인 필요) ->", err && err.message); });
       };
-      window.addEventListener("pagehide", function () { me.remove(); });
-      net.mode = "firebase";
+      net.leave = function () { list.off(); me.onDisconnect().cancel(); me.remove(); };
+      net.lastSent = -1e9;
+      console.log("[📡 net] Firebase 방에 들어감 -> 경로:", kind + "/" + code);
       updatePeople();
     }).catch(function (err) {
+      if (token !== net.token) return;
       console.log("[📡 net] Firebase 연결 실패 ->", err && err.message, "| 탭 시험 모드로 바꿈");
-      startLocalNet("Firebase 연결 실패");
+      joinLocalRoom(kind, code);
+      updatePeople();
     });
   }
-  function startNet() {
-    if (FIREBASE_DB_URL) startFirebaseNet(); else startLocalNet("Firebase 주소가 비어 있음");
+  function firebaseRooms(cb) {   // 랜덤 방 목록: pub 아래 방마다 사람 수
+    ensureFirebase().then(function (db) { return db.ref("pub").once("value"); }).then(function (snap) {
+      const rooms = {};
+      snap.forEach(function (r) { rooms[r.key] = r.numChildren(); });
+      cb(rooms);
+    }).catch(function (err) {
+      console.log("[📡 net] 랜덤 방 목록을 못 읽음 ->", err && err.message, "| 탭 시험 모드로 찾아봄");
+      localRooms(cb);
+    });
   }
 
   function updateOthers(dt) {
@@ -3307,32 +3573,32 @@
     updateEmoji(myEmoji);
   }
 
-  // ---- 👣 눈 발자국: 걸으면 눈에 동글동글 발자국이 남고, 30초쯤 지나면 눈에 덮여 사라져요 ----
-  const PRINTS = { N: 500, LIFE: 30, FADE: 12, STRIDE: 0.85 };
+  // ---- 👣 눈 발자국: 걸으면 눈에 동글동글 발자국이 남고, 3분쯤 지나면 눈에 덮여 사라져요 (LIFE = 남는 시간(초). 공중샷으로 그림을 보려고 넉넉하게) ----
+  const PRINTS = { N: 3000, LIFE: 180, FADE: 40, STRIDE: 0.85 };
   const printBorn = new Float32Array(PRINTS.N).fill(-999);
   const printMesh = (function () {
     const geo = new THREE.PlaneGeometry(0.56, 0.72);
     geo.rotateX(-Math.PI / 2);
     geo.setAttribute("aBorn", new THREE.InstancedBufferAttribute(printBorn, 1));
     const mat = new THREE.ShaderMaterial({
-      uniforms: { uNow: { value: 0 } },
+      uniforms: { uNow: { value: 0 }, uAir: { value: 0 }, uFar: { value: new THREE.Vector2(40, 70) } },   // uAir: 공중샷일수록 1 (크고 진하게), uFar: 이 거리부터 흐려져요
       vertexShader: `
-        attribute float aBorn; uniform float uNow; varying vec2 vUv; varying float vA;
+        attribute float aBorn; uniform float uNow; uniform float uAir; uniform vec2 uFar; varying vec2 vUv; varying float vA;
         void main() {
           vUv = uv;
-          vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+          vec4 wp = modelMatrix * instanceMatrix * vec4(position * (1.0 + 0.7 * uAir), 1.0);
           float age = uNow - aBorn;
-          vA = smoothstep(0.0, 0.15, age) * (1.0 - smoothstep(${PRINTS.LIFE - PRINTS.FADE}.0, ${PRINTS.LIFE}.0, age)) * (1.0 - smoothstep(40.0, 70.0, distance(wp.xyz, cameraPosition)));
+          vA = smoothstep(0.0, 0.15, age) * (1.0 - smoothstep(${PRINTS.LIFE - PRINTS.FADE}.0, ${PRINTS.LIFE}.0, age)) * (1.0 - smoothstep(uFar.x, uFar.y, distance(wp.xyz, cameraPosition)));
           gl_Position = projectionMatrix * viewMatrix * wp;
         }`,
       fragmentShader: `
-        varying vec2 vUv; varying float vA;
+        uniform float uAir; varying vec2 vUv; varying float vA;
         void main() {
           vec2 p = (vUv - 0.5) * 2.0;
           float d = length(p * vec2(1.0, 0.92));
           float m = 1.0 - smoothstep(0.6, 1.0, d);                         // 둥근 발자국, 가장자리는 부드럽게
           float shade = m * (0.55 + 0.45 * (1.0 - smoothstep(0.0, 0.75, d))) * (0.8 + 0.2 * p.y);   // 안쪽이 더 깊어요
-          gl_FragColor = vec4(mix(vec3(1.0), vec3(0.76, 0.82, 0.97), shade * vA), 1.0);   // 곱하기: 1이면 그대로, 파르스름하게 눌린 그늘
+          gl_FragColor = vec4(mix(vec3(1.0), mix(vec3(0.76, 0.82, 0.97), vec3(0.5, 0.6, 0.9), uAir), shade * vA), 1.0);   // 곱하기: 1이면 그대로, 파르스름하게 눌린 그늘
         }`,
       blending: THREE.MultiplyBlending, transparent: true, depthWrite: false
     });
@@ -3374,6 +3640,8 @@
   }
   function updatePrints(t) {
     printMesh.material.uniforms.uNow.value = t;
+    printMesh.material.uniforms.uAir.value = clamp(ambient.air / 30, 0, 1);
+    printMesh.material.uniforms.uFar.value.set(40 + ambient.air * 3, 70 + ambient.air * 4.5);
     snowGlitter.t.value = t % 1000;
     if (state.mode === "play") {
       printState.me = printState.me || {};
@@ -3537,11 +3805,15 @@
     if (fire.tintHold > 0) { fire.tintHold -= dt; fire.tintAmt = Math.min(1, fire.tintAmt + dt * 1.3); }   // 넣은 원소가 타는 동안
     else fire.tintAmt = Math.max(0, fire.tintAmt - dt / 7);                                                 // 다 타면 천천히 원래 불로
     fire.tintCur.lerp(fire.tintTarget, Math.min(1, dt * 2.5));
+    // 원소를 넣으면: 0.18초 만에 휙 커졌다가 1.4초에 걸쳐 스르르 원래대로
+    fire.surgeT += dt;
+    const sg = fire.surge = fire.surgeT < 0.18 ? sstep(0, 0.18, fire.surgeT) : Math.pow(Math.max(0, 1 - (fire.surgeT - 0.18) / 1.4), 2);
     for (let i = 0; i < fire.flames.length; i++) {
       const fl = fire.flames[i];
       fl.uniforms.uTintAmt.value = fire.tintAmt;
       fl.uniforms.uTime.value = t % 600;
-      fl.uniforms.uGain.value = fl.gain * seen;
+      fl.uniforms.uGain.value = fl.gain * seen * (1 + 0.15 * sg);
+      fl.mesh.scale.set(1 + 0.3 * sg, 1 + 0.7 * sg, 1);
       fl.mesh.visible = seen > 0.01;
       fl.mesh.rotation.y = ry;
     }
@@ -3554,7 +3826,7 @@
       fire.popIn = 0.5 + Math.random() * 2.2;
       fire.popped = true; fire.boost = 1;
     }
-    fire.sparkAcc += dt * 9;
+    fire.sparkAcc += dt * 9 * (1 + 5 * sg);
     while (fire.sparkAcc >= 1) { spawnSpark(false); fire.sparkAcc -= 1; }
     // 불티: 뜨거운 공기에 휘말려 흔들리며 오르다가, 노랑 -> 주황 -> 빨강으로 식으며 꺼져요
     const sPos = fire.sparks.geometry.attributes.position.array, sCol = fire.sparks.geometry.attributes.color.array;
@@ -3578,7 +3850,7 @@
     fire.sparks.geometry.attributes.color.needsUpdate = true;
     // 불빛: 느린 물결 여러 개를 겹쳐서 부드럽게 일렁이게 (프레임마다 무작위로 깜빡이면 가짜 티가 나요)
     fire.boost = Math.max(0, fire.boost - dt * 3);
-    const level = 1 + 0.12 * Math.sin(t * 7.3) + 0.08 * Math.sin(t * 13.7 + 1.3) + 0.06 * Math.sin(t * 23.1 + 0.7) + fire.boost * 0.25;
+    const level = 1 + 0.12 * Math.sin(t * 7.3) + 0.08 * Math.sin(t * 13.7 + 1.3) + 0.06 * Math.sin(t * 23.1 + 0.7) + fire.boost * 0.25 + sg * 0.8;
     fire.light.intensity = 2.2 * level;
     fire.light.color.setHex(0xff8a3a).lerp(fire.tintCur, fire.tintAmt * 0.75);
     fire.glow.material.color.setRGB(1, 1, 1).lerp(fire.tintCur, fire.tintAmt * 0.8);
@@ -3764,6 +4036,7 @@
       console.log("[🍡 mallow] 꽂음 -> 이유:", why);
     } else if (mallow.burning > 0) {
       mallow.burning = 0; mallow.cook = Math.max(mallow.cook, 1.1);
+      playBlow();
       note("💨 후~ 불을 껐어요. 겉이 까맣게 됐어요", 3500);
       console.log("[🍡 mallow] 불 끔 -> 익은 정도:", mallow.cook.toFixed(2));
     } else if (mallow.inspect < 0) {
@@ -3876,6 +4149,8 @@
     if (fire.tintAmt < 0.05) fire.tintCur.copy(fire.tintTarget);
     fire.tintHold = 22;
     fire.boost = 1;
+    fire.surgeT = 0;   // 불이 휙 커졌다가 돌아와요 (updateFire)
+    fire.tintAmt = Math.max(fire.tintAmt, 0.55);   // 커지는 순간부터 그 원소 색이 보이게
     for (let k = 0; k < 16; k++) spawnSpark(true);
     playFlare();
     note("🧪 " + el.salt + " 가루 → " + el.ko + "(" + el.sym + ") " + el.color + " 불꽃 · " + el.fact, 6500);
@@ -4233,7 +4508,7 @@
   }
 
   // 구역을 옮기면 하늘색·안개·별 밝기가 천천히 바뀌어요 (비 오는 숲은 흐리고 어둡게)
-  const ambient = { color: new THREE.Color(0x141a3a), near: 40, far: 120, stars: 1, glow: new THREE.Color(0), vista: 0, light: 1 };
+  const ambient = { color: new THREE.Color(0x141a3a), near: 40, far: 120, air: 0, stars: 1, glow: new THREE.Color(0), vista: 0, light: 1 };
   const tmpColor = new THREE.Color();
   let dimLevel = 1;   // 1 = 평소 밝기, 작을수록 주변이 어두움
   function updateAmbient(dt) {
@@ -4248,7 +4523,8 @@
     ambient.light += ((a.light || 1) - ambient.light) * k;
     scene.background.copy(ambient.color);
     scene.fog.color.copy(ambient.color);
-    scene.fog.near = ambient.near; scene.fog.far = ambient.far;
+    ambient.air += ((state.mode === "play" && state.aerial ? cam.air : 0) - ambient.air) * Math.min(1, dt * 2.5);   // 공중샷: 높이 올라간 만큼 안개를 밀어내요 (안 그러면 바닥이 안개에 묻혀요)
+    scene.fog.near = ambient.near + ambient.air * 1.3; scene.fog.far = ambient.far + ambient.air * 3.2;
     // 불멍·책 읽기 중에는 달빛·하늘빛을 줄여서 불빛(등불)만 남겨요
     dimLevel += ((seatKind === "fire" ? 0.22 : seatKind === "read" ? 0.4 : 1) - dimLevel) * k;
     hemiLight.intensity = 0.5 * dimLevel * ambient.light;
@@ -4258,6 +4534,11 @@
   }
 
   const tmpV = new THREE.Vector3();
+  function turnLook(eye, look) {   // 앉은 눈 위치(eye)에서 보는 곳(look)을 고개 돌린 만큼(cam.lookYaw·lookPitch) 옮겨요
+    const dx = look.x - eye.x, dy = look.y - eye.y, dz = look.z - eye.z, h = Math.hypot(dx, dz), d = Math.hypot(h, dy);
+    const yaw = Math.atan2(dx, dz) + cam.lookYaw, pit = clamp(Math.atan2(dy, h) + cam.lookPitch, -1.2, 1.45);
+    look.set(eye.x + Math.sin(yaw) * Math.cos(pit) * d, eye.y + Math.sin(pit) * d, eye.z + Math.cos(yaw) * Math.cos(pit) * d);
+  }
   function updateCamera(dt) {
     const p = player.pos;
     let yaw = cam.yaw, pitch = cam.pitch, dist = cam.dist;
@@ -4277,13 +4558,15 @@
       if (!reduceMotion) cam.yaw += dt * 0.05;
       dist = 15; pitch = 0.3;
       yaw = cam.yaw;
+    } else if (state.aerial) {
+      pitch = cam.airPitch; dist = cam.air;   // 공중샷: 거의 바로 위에서 내려다봐요
     }
     tmpV.set(
       p.x + Math.sin(yaw) * Math.cos(pitch) * dist + panX,
       p.y + 1.5 + Math.sin(pitch) * dist,
       p.z + Math.cos(yaw) * Math.cos(pitch) * dist
     );
-    if (state.mode === "play" && Math.hypot(p.x - rain.roof.x, p.z - rain.roof.z) < 3.9) {
+    if (state.mode === "play" && !state.aerial && Math.hypot(p.x - rain.roof.x, p.z - rain.roof.z) < 3.9) {
       const lowPitch = Math.min(pitch, 0.1), nearDist = Math.min(dist, 9);   // 정자 지붕 아래: 카메라를 낮춰서 지붕 밑이 보이게
       tmpV.set(p.x + Math.sin(yaw) * Math.cos(lowPitch) * nearDist, p.y + 1.5 + Math.sin(lowPitch) * nearDist, p.z + Math.cos(yaw) * Math.cos(lowPitch) * nearDist);
     }
@@ -4291,16 +4574,20 @@
       const sh = player.seat.heading;   // 누워서 별 보기: 카메라를 낮추고 하늘을 올려다봐요
       tmpV.set(player.seat.x, 0.9, player.seat.z);   // 내 눈 위치에서 하늘만
       look.set(player.seat.x + Math.sin(sh) * 10, 10.9, player.seat.z + Math.cos(sh) * 10);
+      turnLook(tmpV, look);
     }
     if (state.mode === "play" && player.seat && player.seat.kind === "view") {
       const vs = player.seat, h = vs.heading;   // 전망 보기: 벤치에 앉은 눈높이에서 계곡 너머를, 하늘이 넉넉히 보이게 살짝 위로
       tmpV.set(vs.x, 1.55, vs.z);
       look.set(vs.x + Math.sin(h) * 30, 1.55 + 30 * Math.tan(0.05), vs.z + Math.cos(h) * 30);
+      turnLook(tmpV, look);
     }
     if (state.mode === "play" && player.seat && player.seat.kind === "fire") {
       const fs = player.seat, sway = Math.sin(performance.now() / 2600) * 0.06;   // 불멍: 내 눈 위치에서 불만 (숨 쉬듯 아주 살짝 흔들림)
       tmpV.set(fs.x + Math.sin(fs.heading) * 0.2 + sway, 1.45, fs.z + Math.cos(fs.heading) * 0.2);
       look.set(FIRE.x, 1.65, FIRE.z);
+      if (mallow.on || sprinkle.t >= 0) { const back = Math.exp(-dt * 5); cam.lookYaw *= back; cam.lookPitch *= back; }   // 마시멜로·가루를 들면 다시 불 쪽으로
+      turnLook(tmpV, look);
     }
     if (state.mode === "play" && player.seat && player.seat.kind === "read") {
       const rs = player.seat;   // 책 읽기: 의자에 앉은 눈높이에서 등불과 책장 쪽을 봐요 (책은 화면 가운데에 펼쳐짐)
@@ -4374,14 +4661,20 @@
     } else {
       player.pos.set((Math.random() - 0.5) * 8, 0, 4 + Math.random() * 5);   // 여러 명이 한 자리에 겹쳐 나타나지 않게
     }
-    startNet();
-    if (data.mode === "play") enterWorld(false); else openPanel(true);
+    openLobby();
+    window.addEventListener("pagehide", function () { if (net.leave) net.leave(); });   // 창을 닫으면 방에서 나가요
+    if (data.mode === "play") {
+      const code = cleanRoomCode(data.room);
+      if ((data.kind === "pub" || data.kind === "prv") && code.length === 4) joinRoom(data.kind, code, "다시 불러옴");   // 페이지가 다시 불려도 있던 방으로
+      else updatePeople();
+      enterWorld(false);
+    } else { updatePeople(); openPanel(true); }
     updateSoundButton();
     requestAnimationFrame(loop);
   }
   const hot = window.claude && window.claude.hot;
   if (hot && typeof hot.snapshot === "function") {
-    hot.snapshot(function () { return { x: player.pos.x, z: player.pos.z, yaw: cam.yaw, mode: state.mode }; });
+    hot.snapshot(function () { return { x: player.pos.x, z: player.pos.z, yaw: cam.yaw, mode: state.mode, kind: net.kind, room: net.room }; });
   }
   if (hot && typeof hot.ready === "function") hot.ready(start); else start((hot && hot.data) || {});
 })();
