@@ -35,6 +35,8 @@ const FIRE_SEAT = { x: 0, z: -86.2, yaw: 0 };    // 모닥불 앞 통나무 (E �
 const VIEW_SEAT = { x: 3, z: -96, yaw: 0 };      // 캠핑장 절벽 전망 자리
 const PLAZA = { x: -4, z: 6, yaw: 0.6 };         // 중앙 광장 (눈이라 발자국이 남아요)
 const BEACH_BENCH = { x: 4, z: 81.8, yaw: 0 };   // 파도 해변 벤치 앞 (E 누르면 바다를 보고 앉아요)
+const SPRING_EDGE = { x: -65.9, z: 72, yaw: 0 };   // 눈꽃 온천 남쪽 물가 (E 누르면 몸을 담가요)
+const RAIN_BENCH = { x: -80, z: 0.3, yaw: 0 };   // 비 오는 숲 정자 안 벤치 앞 (E 누르면 남쪽을 보고 앉아요)
 
 // ---------- 작은 웹 서버: 저장소 폴더를 그대로 보여 줘요 ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript', '.jpg': 'image/jpeg', '.png': 'image/png', '.json': 'application/json' };
@@ -330,6 +332,50 @@ const tests = {
       const r = await q.evaluate(() => ({ third: !!window.__soft.player.seat.third, watching: document.body.classList.contains('watching'), shown: window.__soft.player.parts.group.visible }));
       check(t, r.third && !r.watching && r.shown, '그루터기는 3인칭 (내 눈사람이 보임)', r);
       await ctx2.close();
+    },
+  },
+
+  spring: {
+    what: '온천 몸 담그기: 1인칭 눈높이가 물 바로 위, 김이 보이고, 둘레 설산은 온천에 있을 때만 보여요',
+    run: async t => {
+      const ctx = await newContext();
+      const p = await open(ctx, t, SPRING_EDGE);
+      await sit(p, 'soak');
+      await until(p, () => window.__soft.cam.pos.y > 0.5 && window.__soft.cam.pos.y < 1.05, null, '물 위 눈높이로 카메라 옮기기');
+      const s = await p.evaluate(() => ({ watching: document.body.classList.contains('watching'), y: +window.__soft.cam.pos.y.toFixed(2), steam: window.__soft.spring.steam.visible }));
+      check(t, s.watching && s.steam, '몸을 담그면 1인칭이고 김이 보임', s);
+      await until(p, () => window.__soft.peaks.group.visible && window.__soft.peaks.mats[0].uniforms.uVista.value > 0.6, null, '둘레 설산이 나타나기');
+      check(t, true, '온천에서는 둘레 설산이 보임');
+      await frames(p, 5);
+      await shot(t, p, 'spring');
+      await ctx.close();
+      const ctx2 = await newContext();
+      const q = await open(ctx2, t, BEACH_BENCH);
+      await frames(q, 30);
+      const far = await q.evaluate(() => window.__soft.peaks.group.visible);
+      check(t, !far, '해변에서는 온천 설산을 그리지 않음', { visible: far });
+      await ctx2.close();
+    },
+  },
+
+  rain: {
+    what: '비 오는 숲 정자 벤치: 1인칭으로 앉으면 안개 속 큰 나무가 보이고, 처마 물방울이 떨어지고, 달은 구름 뒤로 숨어요',
+    run: async t => {
+      const ctx = await newContext();
+      const p = await open(ctx, t, RAIN_BENCH);
+      await sit(p, 'sit');
+      await until(p, () => window.__soft.cam.pos.y > 1.2 && window.__soft.cam.pos.y < 1.9, null, '눈높이로 카메라 옮기기');
+      const s = await p.evaluate(() => ({ watching: document.body.classList.contains('watching'), cover: +window.__soft.rain.cover.toFixed(2) }));
+      check(t, s.watching && s.cover === 1, '정자 벤치는 1인칭이고 큰 나무 숲 안', s);
+      await until(p, () => window.__soft.grove.group.visible && window.__soft.grove.mats[0].uniforms.uVista.value > 0.9, null, '큰 나무 줄기가 보이기');
+      const y0 = await p.evaluate(() => window.__soft.rain.drips.map(d => d.y).join());
+      await frames(p, 4);
+      const y1 = await p.evaluate(() => window.__soft.rain.drips.map(d => d.y).join());
+      check(t, y0 !== y1, '처마 물방울이 떨어짐');
+      await until(p, () => window.__soft.sky.moon.material.opacity < 0.05, null, '달이 구름 뒤로 숨기');
+      check(t, true, '비 오는 숲에서는 달이 안 보임');
+      await shot(t, p, 'rain');
+      await ctx.close();
     },
   },
 

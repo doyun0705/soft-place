@@ -460,11 +460,11 @@
     plaza: { sky: 0x141a3a, near: 26, far: 82, stars: 1 },
     camp: { sky: 0x1a2542, near: 30, far: 105, stars: 1, glow: 0x1d2236, vista: 1, light: 0.62 },   // 사진 같은 푸른 밤. 북쪽 절벽 너머 계곡이 보여요
     keys: { sky: 0x1c1842, near: 26, far: 80, stars: 0.9 },
-    rain: { sky: 0x0f1626, near: 16, far: 60, stars: 0.1 },
+    rain: { sky: 0x26303e, near: 9, far: 48, stars: 0 },   // 구름이 덮여 별도 달도 없고, 큰 나무 사이로 안개가 짙어요
     beach: { sky: 0x12204a, near: 34, far: 115, stars: 1 },      // 바다는 멀리까지 보여야 해서 안개가 멀어요
     voice: { sky: 0x1b1836, near: 24, far: 76, stars: 0.9 },
     library: { sky: 0x1a1730, near: 22, far: 72, stars: 0.8 },
-    spring: { sky: 0x16223f, near: 18, far: 66, stars: 0.7 },   // 김이 올라서 조금 뿌옇게
+    spring: { sky: 0x16223f, near: 18, far: 66, stars: 0.7, peaks: 1 },   // 김이 올라서 조금 뿌옇게. 둘레에 높은 설산(peaks)
     chimes: { sky: 0x1d1a44, near: 26, far: 80, stars: 1 },
     read: { sky: 0x0d0a10, near: 5, far: 24, stars: 0.2 },     // 책 읽는 중: 등불 둘레만 남아요
     fire: { sky: 0x08070d, near: 3.5, far: 15, stars: 0.3 }   // 불멍 중: 주변이 어둠 속으로 사라지고 불만 남아요
@@ -555,6 +555,12 @@
     return base + Math.sin(x * 0.21) * 1.1 + Math.sin(x * 0.53 + 1.3) * 0.5;   // 자로 그은 듯 곧지 않게
   }
   function overCliff(x, z, margin) { return z < cliffZ(x) + (margin || 0); }
+  function springView(x, z) {   // 온천에 몸을 담근 채 먼 설산을 볼 수 있게 둘레 30 m는 나무를 비워요 (도윤 2026-11-22: 공간마다 분위기가 따로여도 돼요)
+    return Math.hypot(x + V, z - V) < 30;
+  }
+  function rainView(x, z) {   // 비 오는 숲: 정자 둘레 52 m는 전나무 대신 안개 속 큰 나무 줄기만 (공간마다 분위기가 따로여도 돼요)
+    return Math.hypot(x + D, z) < 52;
+  }
   function campView(x, z) {   // 캠핑장에서 절벽 너머를 볼 수 있게 나무를 비워 두는 부채꼴
     return z < FIRE.z - 5 && Math.abs(x - FIRE.x) < (FIRE.z - 5 - z) * 1.1 + 5;
   }
@@ -819,6 +825,7 @@
     halo.rotation.x = -Math.PI / 2; walkables.push(halo);
     const core = addMesh(blobGeometry(r, seed), map ? lambert(hex, { map: map }) : lambert(hex), x, 0.06, z);
     core.rotation.x = -Math.PI / 2; walkables.push(core);
+    core.userData.halo = halo;
     console.log("[🟤 ground] 구역 바닥 -> 중심:", x, z, "| 반지름:", r);
     return core;
   }
@@ -884,6 +891,7 @@
   function makeTree(x, z, s) {
     if (inClearing(x, z)) return false;   // 길·개울·입구 위에는 나무를 심지 않아요
     if (overCliff(x, z, 1.8) || campView(x, z)) return false;   // 절벽 밖, 캠핑장 전망 자리도 비워요
+    if (springView(x, z) || rainView(x, z)) { rand(); return false; }   // 온천 빈터, 비 오는 숲 큰 나무 자리. rand()를 심었을 때처럼 한 번 써서 다른 곳 나무 자리가 안 바뀌어요
     treeSpots.push({ x: x, z: z, s: s, rot: rand() * Math.PI * 2 });
     colliders.push({ x: x, z: z, r: 0.55 * s });
     return true;
@@ -1386,15 +1394,19 @@
   // 멀리 있는 것들이라 안개를 직접 계산해요(가까운 숲 안개와 따로). 캠핑장에 있을 때만 보여요(ambient.vista)
   const vista = { group: new THREE.Group(), mats: [], C: new THREE.Vector2(FIRE.x, FIRE.z) };
   scene.add(vista.group);
+  const peaks = { group: new THREE.Group(), mats: [], tops: [] };   // 온천 둘레 설산 (온천에 있을 때만, ambient.peaks)
+  scene.add(peaks.group);
+  const grove = { group: new THREE.Group(), mats: [] };   // 비 오는 숲 큰 나무 줄기 (정자 가까이 있을 때만, rain.cover)
+  scene.add(grove.group);
   const VISTA_NOISE = `
     float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float n2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), f.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), f.x), f.y); }`;
-  function vistaMat(extraUniforms, vert, frag, opts) {
+  function vistaMat(extraUniforms, vert, frag, opts, bucket) {
     const m = new THREE.ShaderMaterial(Object.assign({
       uniforms: Object.assign({ uVista: { value: 0 }, uBg: { value: new THREE.Color() }, uTime: { value: 0 }, uPR: { value: renderer.getPixelRatio() } }, extraUniforms),
       vertexShader: vert, fragmentShader: frag, fog: false
     }, opts || {}));
-    vista.mats.push(m);
+    (bucket || vista).mats.push(m);
     return m;
   }
   function noise1(seed) {   // 1차원 부드러운 잡음: 산 능선 모양에 써요
@@ -1566,18 +1578,20 @@
     vista.group.add(mist);
     console.log("[🏔️ vista] 캠핑장 북쪽 전망 -> 산", RIDGES.length, "겹 + 마을 불빛", lp.length / 3, "개 + 절벽 바위면");
   })();
-  function updateVista() {
-    vista.group.visible = ambient.vista > 0.01;
-    if (!vista.group.visible) return;
+  function fadeVista(v, amt) {   // 먼 풍경 묶음을 그 공간에 있을 때만 보이게 (멀어지면 하늘색으로 사라져요)
+    v.group.visible = amt > 0.01;
+    if (!v.group.visible) return;
     const t = performance.now() / 1000 % 1000;
-    for (let i = 0; i < vista.mats.length; i++) {
-      const m = vista.mats[i];
-      if (m.isSpriteMaterial) { m.opacity = ambient.vista; continue; }
-      m.uniforms.uVista.value = ambient.vista;
+    for (let i = 0; i < v.mats.length; i++) {
+      const m = v.mats[i];
+      if (m.isSpriteMaterial) { m.opacity = amt; continue; }
+      m.uniforms.uVista.value = amt;
       m.uniforms.uBg.value.copy(ambient.color);
       m.uniforms.uTime.value = t;
+      if (m.uniforms.uMoonDir) m.uniforms.uMoonDir.value.copy(sky.moonDir);
     }
   }
+  function updateVista() { fadeVista(vista, ambient.vista); fadeVista(peaks, ambient.peaks); fadeVista(grove, rain.cover); }
 
   // ---- ⌨️ 딸깍 정원 ----
   const keycaps = [];
@@ -1630,25 +1644,141 @@
   })();
 
   // ---- 🌧️ 비 오는 숲 ----
-  const rain = { lines: null, data: [], roof: { x: -D, z: 0, r: 4.6, h: 3.2 } };
+  const rain = { lines: null, data: [], roof: { x: -D, z: 0, r: 4.6, h: 3.2 }, u: null, ground: null, drips: [], dripLines: null, cover: 0 };
   (function buildRainForest() {
     const RX = -D, RZ = 0;
-    zoneGround(17, 0x8fa49b, RX, RZ, 3.7);
-    addMesh(new THREE.CylinderGeometry(3.8, 3.8, 0.12, 4), MAT.wood, RX, 0.06, RZ).rotation.y = Math.PI / 4;
+    const LAMP = new THREE.Vector3(RX, 2.6, RZ);
+    const u = rain.u = {
+      uTime: { value: 0 }, uLamp: { value: LAMP }, uLampCol: { value: new THREE.Color(0xffc98a) }, uSky: { value: new THREE.Color(0x151d29) }
+    };
+    // 젖은 땅: 흙과 이끼, 군데군데 물웅덩이. 웅덩이엔 빗방울 동그라미가 계속 번지고, 등불과 흐린 하늘이 비쳐요
+    const gu = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]);
+    Object.assign(gu, u);
+    rain.ground = zoneGround(17, 0x8fa49b, RX, RZ, 3.7);
+    rain.ground.userData.halo.visible = false;   // 가장자리 밝은 띠 대신 숲 바닥이 이어져요
+    gu.uEdge = { value: new THREE.Vector3(RX, RZ, 1e4) };
+    rain.ground.material = new THREE.ShaderMaterial({
+      uniforms: gu, fog: true,
+      vertexShader: "#include <fog_pars_vertex>\nvarying vec3 vW;\nvoid main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}",
+      fragmentShader: "#include <fog_pars_fragment>\n" + VISTA_NOISE + `
+        uniform float uTime; uniform vec3 uLamp, uLampCol, uSky, uEdge; varying vec3 vW;
+        float fbm(vec2 p) { return n2(p) * 0.5 + n2(p * 2.03 + 7.1) * 0.25 + n2(p * 4.01 + 3.7) * 0.125; }
+        vec2 drops(vec2 p) {   // 빗방울이 떨어진 자리마다 작은 동그라미 물결
+          vec2 s = vec2(0.0);
+          for (int k = 0; k < 3; k++) {
+            vec2 q = p * 3.0 + float(k) * 11.7, cell = floor(q);
+            float h = h2(cell + float(k) * 5.3), age = mod(uTime * 1.3 + h * 7.0, 0.7 + 0.6 * h);
+            vec2 d = fract(q) - 0.5 - (vec2(h2(cell + 2.1), h2(cell + 6.7)) - 0.5) * 0.5;
+            float x = length(d) / 3.0 - age * 0.3;
+            s += d / max(length(d), 1e-3) * sin(x * 160.0) * exp(-x * x * 5000.0) * exp(-age * 3.0);
+          }
+          return s * 0.08;
+        }
+        void main() {
+          vec2 p = vW.xz;
+          float n = fbm(p * 0.35), m = fbm(p * 1.3 + 4.0);
+          float puddle = smoothstep(0.55, 0.6, n * 0.8 + m * 0.25);
+          vec3 soil = mix(vec3(0.05, 0.04, 0.032), vec3(0.08, 0.066, 0.05), m);
+          soil = mix(soil, vec3(0.028, 0.045, 0.022), smoothstep(0.5, 0.7, fbm(p * 0.6 + 9.0)) * 0.7);   // 이끼
+          vec3 V = normalize(cameraPosition - vW);
+          vec2 sl = drops(p) * puddle + (vec2(n2(p * 6.0), n2(p * 6.0 + 3.0)) - 0.5) * 0.15 * (1.0 - puddle);
+          vec3 N = normalize(vec3(-sl.x, 1.0, -sl.y));
+          float nv = max(dot(N, V), 0.02), F = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
+          vec3 L = uLamp - vW; float ld = length(L); L /= ld;
+          vec3 col = soil * (0.3 + uLampCol * max(dot(N, L), 0.0) * 3.5 / (1.0 + ld * ld * 0.03));
+          col = mix(col, uSky * 1.3, F * mix(0.35, 0.9, puddle));                                  // 흐린 하늘이 비쳐요
+          col += uLampCol * pow(max(dot(N, normalize(L + V)), 0.0), mix(60.0, 900.0, puddle)) * mix(0.4, 3.0, puddle) / (1.0 + ld * ld * 0.02);   // 등불 반짝임
+          gl_FragColor = vec4(col, 1.0 - smoothstep(uEdge.z - 8.0, uEdge.z, length(vW.xz - uEdge.xy)));   // 숲 바닥 가장자리는 눈밭으로 스며요
+          #include <fog_fragment>
+        }`
+    });
+    const floor = addMesh(new THREE.CircleGeometry(52, 56), new THREE.ShaderMaterial({   // 큰 나무 아래 숲 바닥 (정자 둘레 52 m, 길과 구역 바닥보다 아래)
+      uniforms: Object.assign({}, gu, { uEdge: { value: new THREE.Vector3(RX, RZ, 52) } }), fog: true, transparent: true, depthWrite: false,
+      vertexShader: rain.ground.material.vertexShader, fragmentShader: rain.ground.material.fragmentShader
+    }), RX, 0.012, RZ);
+    floor.rotation.x = -Math.PI / 2; floor.renderOrder = -1;
+    const wetWood = lambert(0x3b2d24), wetPost = lambert(0x2a1f19), wetRoof = lambert(0x2f241e);   // 비에 젖어 짙은 나무
+    addMesh(new THREE.CylinderGeometry(3.8, 3.8, 0.12, 4), wetWood, RX, 0.06, RZ).rotation.y = Math.PI / 4;
     [[-2.5, -2.5], [2.5, -2.5], [-2.5, 2.5], [2.5, 2.5]].forEach(function (p) {
-      addMesh(new THREE.CylinderGeometry(0.15, 0.15, 3.2, 8), MAT.darkWood, RX + p[0], 1.6, RZ + p[1]);
+      addMesh(new THREE.CylinderGeometry(0.15, 0.15, 3.2, 8), wetPost, RX + p[0], 1.6, RZ + p[1]);
       colliders.push({ x: RX + p[0], z: RZ + p[1], r: 0.35 });
     });
-    const roof = addMesh(new THREE.ConeGeometry(4.8, 1.9, 4), MAT.roof, RX, 4.1, RZ);
+    const roof = addMesh(new THREE.ConeGeometry(4.8, 1.9, 4), wetRoof, RX, 4.1, RZ);
+    [[0, -2.5, 0], [0, 2.5, 0], [-2.5, 0, 1], [2.5, 0, 1]].forEach(function (b) {   // 기둥 위 들보 4개
+      addMesh(new THREE.BoxGeometry(b[2] ? 0.16 : 5.3, 0.18, b[2] ? 5.3 : 0.16), wetPost, RX + b[0], 3.12, RZ + b[1]);
+    });
+    [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (c) {   // 지붕 모서리 서까래: 귀퉁이에서 꼭대기로
+      const r = addMesh(new THREE.BoxGeometry(0.13, 0.13, 5.16), wetPost, RX + c[0] * 1.7, 4.1, RZ + c[1] * 1.7);
+      r.lookAt(RX, 5.05, RZ); r.position.y -= 0.12;
+    });
     roof.rotation.y = Math.PI / 4;
     addMesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffc98a }), RX, 2.7, RZ);
     const lantern = new THREE.PointLight(0xffc98a, 0.8, 12, 2);
     lantern.position.set(RX, 2.6, RZ); scene.add(lantern);
     makeBench(RX, RZ - 1.9, 0);   // 정자 안 벤치
-    for (let i = 0; i < 5; i++) {
-      const p = addMesh(new THREE.CircleGeometry(0.8 + rand() * 0.9, 20), new THREE.MeshBasicMaterial({ color: 0x5c7fa8, transparent: true, opacity: 0.45 }), RX - 10 + rand() * 20, 0.08, RZ - 10 + rand() * 20);
-      p.rotation.x = -Math.PI / 2;
-    }
+    Object.assign(seats[seats.length - 1], { note: "🌧️ 처마 끝 빗방울 너머 안개 속 큰 나무들 · 빗소리 들으며 쉬어요 · B 숨 흔들림", lookUp: 0.06 });
+    for (let i = 0; i < 15; i++) rand();   // 예전 물웅덩이 5개가 쓰던 씨앗 수 (지금은 땅 셰이더가 웅덩이를 그려요)
+
+    // 안개 속 큰 나무 줄기: 위는 안개(구름) 속으로 사라지고, 밑동은 뿌리가 퍼지고 이끼가 껴요. 하나로 합쳐 한 번에 그려요
+    (function buildGrove() {
+      const gr = mulberry32(4242), spots = [], pos = [], bb = [], idx = [];
+      for (let k = 0; k < 600 && spots.length < 46; k++) {
+        const a = gr() * Math.PI * 2, r = 11 + Math.sqrt(gr()) * 35, x = RX + Math.cos(a) * r, z = RZ + Math.sin(a) * r;
+        if (inClearing(x, z) || (x > RX + 4 && Math.abs(z - RZ) < 6)) continue;   // 길과 동쪽 입구는 비워요
+        if (spots.some(function (q) { return Math.hypot(q[0] - x, q[1] - z) < 6.5; })) continue;
+        spots.push([x, z, 0.9 + gr() * 1.3]);
+      }
+      spots.forEach(function (sp) {
+        const x = sp[0], z = sp[1], R0 = sp[2], seed = gr() * 10, lean = (gr() - 0.5) * 0.04, leanA = gr() * 6.28, SEG = 16, ROWS = 14, H = 70, base = pos.length / 3;
+        for (let j = 0; j <= ROWS; j++) {
+          const y = -0.5 + H * Math.pow(j / ROWS, 1.8);   // 아래쪽에 점을 촘촘히 (뿌리 모양)
+          for (let i = 0; i <= SEG; i++) {
+            const t = i / SEG * Math.PI * 2;
+            const flare = 1 + 1.3 * Math.exp(-Math.max(y, 0) / 1.8) * (0.75 + 0.25 * Math.sin(t * 5 + seed));   // 땅에 닿는 곳은 뿌리가 퍼져요
+            const r = R0 * flare * (1 - y * 0.0045) * (1 + 0.04 * Math.sin(t * 9 + seed * 2 + y * 0.3));
+            pos.push(x + Math.cos(t) * r + Math.cos(leanA) * lean * y, y, z + Math.sin(t) * r + Math.sin(leanA) * lean * y);
+            bb.push(t * R0, y);
+          }
+        }
+        for (let j = 0; j < ROWS; j++) for (let i = 0; i < SEG; i++) {
+          const a0 = base + j * (SEG + 1) + i, b0 = a0 + SEG + 1;
+          idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1);
+        }
+        colliders.push({ x: x, z: z, r: R0 * 1.6 + 0.3 });
+      });
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute("aB", new THREE.Float32BufferAttribute(bb, 2));
+      g.setIndex(idx);
+      g.computeVertexNormals();
+      const m = new THREE.Mesh(g, vistaMat({ uLamp: { value: LAMP }, uLampCol: u.uLampCol },
+        "attribute vec2 aB; varying vec3 vW; varying vec3 vN; varying vec2 vB; void main() { vB = aB; vN = normal; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }",
+        VISTA_NOISE + `
+          uniform vec3 uBg; uniform float uVista; uniform vec3 uLamp; uniform vec3 uLampCol;
+          varying vec3 vW; varying vec3 vN; varying vec2 vB;
+          void main() {
+            vec3 N = normalize(vN);
+            float f = n2(vec2(vB.x * 2.2, vB.y * 0.18)) * 0.55 + n2(vec2(vB.x * 7.0, vB.y * 0.6)) * 0.3 + n2(vec2(vB.x * 20.0, vB.y * 2.0)) * 0.15;
+            float ridge = smoothstep(0.38, 0.62, f);                                             // 세로로 깊게 갈라진 나무껍질
+            vec3 bark = mix(vec3(0.035, 0.022, 0.017), vec3(0.15, 0.092, 0.065), ridge);
+            float moss = smoothstep(5.0, 0.5, vW.y) * smoothstep(0.45, 0.7, n2(vB * vec2(1.5, 0.5) + 9.0));
+            moss = max(moss, smoothstep(0.3, 0.9, N.z * 0.5 + 0.5) * smoothstep(0.55, 0.8, n2(vB * vec2(0.8, 0.12) + 4.0)) * 0.7);   // 밑동과 한쪽 면의 이끼
+            bark = mix(bark, vec3(0.045, 0.07, 0.03), moss);
+            vec3 L = uLamp - vW; float ld = length(L); L /= ld;
+            vec3 V = normalize(cameraPosition - vW);
+            float diff = max(dot(N, L), 0.0) / (1.0 + ld * ld * 0.012);
+            float spec = pow(max(dot(N, normalize(L + V)), 0.0), 40.0) * 0.6 / (1.0 + ld * ld * 0.02) * (1.0 - ridge * 0.5);   // 비에 젖어 번들거려요
+            vec3 col = bark * (0.22 + uLampCol * diff * 2.2) + uLampCol * spec * 0.25;
+            float d = length(cameraPosition - vW);
+            float fogA = max(1.0 - exp(-d * 0.045), smoothstep(6.0, 26.0, vW.y));                // 멀수록, 높을수록 안개 속으로
+            vec3 mist = uBg * 1.35 + uLampCol * 0.04 / (1.0 + length(vW - uLamp) * 0.05);
+            col = mix(col, mist, clamp(fogA, 0.0, 1.0));
+            gl_FragColor = vec4(mix(uBg, col, uVista), 1.0);
+          }`, {}, grove));
+      m.frustumCulled = false;
+      grove.group.add(m);
+      console.log("[🌲 grove] 비 오는 숲 큰 나무 줄기 ->", spots.length, "그루 | 점:", pos.length / 3);
+    })();
     for (let i = 0; i < 26; i++) {
       const a = rand() * Math.PI * 2, r = 7 + rand() * 9;
       const tx = RX + Math.cos(a) * r, tz = RZ + Math.sin(a) * r;
@@ -1663,11 +1793,35 @@
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    rain.lines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xa9c4ff, transparent: true, opacity: 0.55 }));
+    function headTail(n) { const a = new Float32Array(n * 2); for (let i = 0; i < n; i++) a[i * 2] = 1; return a; }   // 아래 끝(머리) 1, 위 끝(꼬리) 0
+    geo.setAttribute("aA", new THREE.BufferAttribute(headTail(N), 1));
+    const streakMat = new THREE.ShaderMaterial({
+      uniforms: u, transparent: true, depthWrite: false,
+      vertexShader: "attribute float aA; varying float vA; varying vec3 vW; void main() { vA = aA; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }",
+      fragmentShader: `uniform vec3 uLamp, uLampCol, uSky; varying float vA; varying vec3 vW;
+        void main() {
+          float ld = length(vW - uLamp), cd = length(cameraPosition - vW);
+          vec3 col = uSky * 2.4 + uLampCol * 1.4 / (1.0 + ld * ld * 0.08);   // 등불 가까운 빗줄기는 따뜻하게 빛나요
+          gl_FragColor = vec4(col, vA * (0.16 + 0.5 / (1.0 + ld * ld * 0.05)) * (1.0 - smoothstep(12.0, 40.0, cd)));
+        }`
+    });
+    rain.lines = new THREE.LineSegments(geo, streakMat);
     rain.lines.frustumCulled = false;
     scene.add(rain.lines);
+    // 처마 물방울: 지붕 네 변을 따라 줄줄이 맺혔다 떨어져요 (지붕 밑변은 정자 가운데에서 3.39 m, 높이 3.15 m)
+    const DR = 3.39, ND = 64, dg = new THREE.BufferGeometry();
+    for (let i = 0; i < ND; i++) {
+      const side = i % 4, f = (Math.floor(i / 4) + 0.5) / 16 * 2 - 1;
+      const dx = side < 2 ? f * DR : (side === 2 ? DR : -DR), dz = side < 2 ? (side === 0 ? DR : -DR) : f * DR;
+      rain.drips.push({ x: RX + dx, z: RZ + dz, y: 3.12, v: 0, wait: Math.random() * 1.2 });
+    }
+    dg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(ND * 6), 3));
+    dg.setAttribute("aA", new THREE.BufferAttribute(headTail(ND), 1));
+    rain.dripLines = new THREE.LineSegments(dg, streakMat);
+    rain.dripLines.frustumCulled = false;
+    scene.add(rain.dripLines);
     makeZoneSign(ZONES[3]);
-    console.log("[🌧️ rain] 정자 + 나무 + 빗줄기", N, "개");
+    console.log("[🌧️ rain] 정자 + 젖은 땅 셰이더 + 빗줄기", N, "개 + 처마 물방울", ND, "개");
   })();
 
   // ---- 🌊 파도 해변 ----
@@ -1983,6 +2137,7 @@
       if (inZone) continue;
       if (i % 6 === 0) {
         if (inClearing(x, z)) continue;
+        if (springView(x, z) || rainView(x, z)) { rand(); rand(); rand(); continue; }   // 온천 빈터, 비 오는 숲 (씨앗 순서 지키기)
         const r = 0.5 + rand() * 0.7;
         const rock = addMesh(new THREE.DodecahedronGeometry(r, 0), MAT.stone, x, r * 0.4, z);
         rock.rotation.set(rand() * 3, rand() * 3, 0);
@@ -2089,45 +2244,322 @@
   })();
 
   // ---- ♨️ 눈꽃 온천: 돌로 둘러싼 따뜻한 물. 가장자리에서 E를 누르면 몸을 담가요 ----
-  const spring = { steam: [], x: ZONES[7].x, z: ZONES[7].z };
+  // 몸을 담그면 눈이 물 위 60 cm쯤. 물(셰이더: 하늘·둘레 반사, 달빛, 눈송이 물결) + 피어오르는 김 + 물가 바위 + 작은 등불 + 김 너머 설산(온천에서만)
+  const spring = { x: ZONES[7].x, z: ZONES[7].z, u: null, steam: null, sky: null, lamp: null };
+  const SPRING = { WATER: 0.2, RIM: 4.75 };   // 물 높이(m), 둘레 바위 안쪽 반지름(m)
   (function buildSpring() {
-    const Z = ZONES[7], cx = Z.x, cz = Z.z;
+    const Z = ZONES[7], cx = Z.x, cz = Z.z, sr = mulberry32(7707);
     zoneGround(Z.r, 0xaeb8c4, cx, cz, 6.3);
-    const water = addMesh(new THREE.CircleGeometry(4.4, 40), new THREE.MeshLambertMaterial({
-      color: 0x4f9da6, emissive: 0x123c44, transparent: true, opacity: 0.88
-    }), cx, 0.2, cz);
+    for (let i = 0; i < 84; i++) rand();   // 예전 돌·김이 쓰던 씨앗 수만큼 넘겨요. 그래야 뒤에 만드는 숲·도서관·풍경 나무 배치가 그대로예요
+
+    // 물에 비칠 둘레 윤곽(방향마다 나무·산 높이): 나무를 다 심은 뒤 bakeSpringSkyline()이 채워요
+    const SKY_N = 512, skyData = new Uint8Array(SKY_N * 4);
+    const skyTex = new THREE.DataTexture(skyData, SKY_N, 1, THREE.RGBAFormat);
+    skyTex.magFilter = skyTex.minFilter = THREE.LinearFilter; skyTex.wrapS = THREE.RepeatWrapping;
+    spring.sky = { data: skyData, tex: skyTex, N: SKY_N };
+
+    const LA = 3.25, LAMP = new THREE.Vector3(cx + Math.cos(LA) * 5.75, 1.19, cz + Math.sin(LA) * 5.75);   // 등불 자리 (물가 바위 뒤)
+    const u = spring.u = {
+      uTime: { value: 0 }, uC: { value: new THREE.Vector2(cx, cz) }, uMoon: { value: 1 }, uRim: { value: SPRING.RIM },
+      uMoonDir: { value: new THREE.Vector3(0, 0.2, 1).normalize() }, uMoonCol: { value: new THREE.Color(0xd6dcff) },
+      uBg: { value: new THREE.Color(0x16223f) }, uZenith: { value: new THREE.Color(0x060a14) },
+      uLamp: { value: LAMP }, uLampCol: { value: new THREE.Color(0xffb366) }, uSky: { value: skyTex }
+    };
+    const SCOMMON = VISTA_NOISE + `
+      uniform float uTime, uMoon, uRim; uniform vec2 uC;
+      uniform vec3 uMoonDir, uMoonCol, uBg, uZenith, uLamp, uLampCol;
+      varying vec3 vW;
+      float fbm(vec2 p) { return n2(p) * 0.5 + n2(p * 2.03 + 7.1) * 0.25 + n2(p * 4.01 + 3.7) * 0.125; }`;
+
+    // (1) 물: 아주 느린 일렁임 + 눈송이가 닿은 자리의 작은 동그라미 물결. 비스듬히 보면 둘레(바위·나무·산·하늘)가 비쳐요
+    const water = addMesh(new THREE.CircleGeometry(SPRING.RIM + 0.4, 64), new THREE.ShaderMaterial({
+      uniforms: u,
+      vertexShader: "varying vec3 vW; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }",
+      fragmentShader: SCOMMON + `
+        uniform sampler2D uSky;
+        vec2 drops(vec2 p) {   // 눈송이가 물에 닿아 번지는 동그라미 (칸마다 한 번씩, 몇 초 간격)
+          vec2 s = vec2(0.0);
+          for (int k = 0; k < 2; k++) {
+            vec2 q = p * 1.0 + float(k) * 17.3, cell = floor(q);
+            float h = h2(cell + float(k) * 3.1), age = mod(uTime + h * 20.0, 3.0 + 3.0 * h);
+            vec2 d = fract(q) - 0.5 - (vec2(h2(cell + 1.7), h2(cell + 4.3)) - 0.5) * 0.6;
+            float x = length(d) - age * 0.22;
+            s += d / max(length(d), 1e-3) * sin(x * 70.0) * exp(-x * x * 900.0) * exp(-age * 1.6);
+          }
+          return s * 0.018;
+        }
+        void main() {
+          vec3 toCam = cameraPosition - vW; float dist = length(toCam); vec3 V = toCam / dist;
+          vec2 p = vW.xz - uC; float rr = length(p);
+          vec2 q = p * 0.8 + vec2(uTime * 0.045, uTime * 0.03);
+          float e = 0.07, n0 = fbm(q);
+          vec2 sl = vec2(fbm(q + vec2(e, 0.0)) - n0, fbm(q + vec2(0.0, e)) - n0) / e * 0.026;   // 따뜻한 물이 천천히 뒤척이는 큰 일렁임
+          sl += vec2(sin(p.x * 2.3 + p.y * 0.7 + uTime * 0.9), sin(p.y * 2.9 - p.x * 0.5 - uTime * 0.7)) * 0.006;
+          sl += drops(p);
+          vec3 N = normalize(vec3(-sl.x, 1.0, -sl.y));
+          float nv = max(dot(N, V), 0.02), F = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
+          vec3 R = reflect(-V, N); R.y = max(R.y, 0.002);
+          vec3 refl = mix(uBg, uZenith, smoothstep(0.0, 0.55, R.y));                       // 하늘
+          float el = asin(R.y), az = atan(R.x, -R.z) / 6.2832 + 0.5;
+          vec4 sk = texture2D(uSky, vec2(az, 0.5));
+          refl = mix(refl, mix(uBg * 1.4, vec3(0.30, 0.34, 0.44) * (0.35 + 0.65 * sk.b) * (0.4 + 0.6 * uMoon), 0.55), smoothstep(0.012, -0.012, el - sk.r * 0.6));   // 먼 설산
+          refl = mix(refl, mix(vec3(0.010, 0.015, 0.020), uBg, 0.5), smoothstep(0.015, -0.015, el - sk.g * 0.6));   // 둘레 숲 (안개에 묻혀 하늘색에 가까워요)
+          vec2 D2 = R.xz; float a = dot(D2, D2), b = 2.0 * dot(p, D2), c = dot(p, p) - uRim * uRim;   // 물가 바위(원기둥)에 닿는 높이
+          float t = (-b + sqrt(max(b * b - 4.0 * a * c, 0.0))) / (2.0 * a + 1e-5), hitY = t * R.y;
+          vec2 hp = p + D2 * t; float ang = atan(hp.y, hp.x);
+          float rimTop = 0.42 + 0.3 * n2(vec2(ang * 3.5, 2.0)) + 0.12 * n2(vec2(ang * 11.0, 5.0));
+          vec3 rimW = vec3(hp.x + uC.x, hitY + 0.2, hp.y + uC.y);
+          float rd = length(rimW - uLamp);
+          vec3 rock = vec3(0.022, 0.024, 0.03) + uLampCol * 0.25 / (1.0 + rd * rd * 0.8);
+          rock = mix(rock, vec3(0.30, 0.33, 0.42) * (0.4 + 0.6 * uMoon), smoothstep(rimTop - 0.12, rimTop - 0.02, hitY) * 0.7);   // 바위 위 눈
+          refl = mix(refl, rock, smoothstep(0.03, -0.03, hitY - rimTop));
+          float lampD = length(vW - uLamp);
+          vec3 body = vec3(0.02, 0.05, 0.052) * (0.7 + 0.3 * uMoon) + uLampCol * 0.05 / (1.0 + lampD * lampD * 0.15);   // 물속: 깊고 살짝 뿌연 초록빛
+          body *= 1.0 - 0.35 * smoothstep(uRim - 0.9, uRim, rr);
+          vec3 col = mix(body, refl, F);
+          vec3 H = normalize(V + uMoonDir);                                                   // 달이 물에 비친 반짝임
+          float nh = max(dot(N, H), 0.0), nh2 = max(nh * nh, 1e-4), m2 = 0.0025;
+          float Db = exp(-(1.0 - nh2) / nh2 / m2) / (3.14159 * m2 * nh2 * nh2);
+          col += uMoonCol * min(Db * F / (4.0 * nv), 400.0) * 0.004 * uMoon;
+          vec3 HL = normalize(V + normalize(uLamp - vW));                                       // 등불이 물에 비친 길
+          col += uLampCol * pow(max(dot(N, HL), 0.0), 300.0) * 2.2 * F / (1.0 + lampD * 0.15);
+          float mist = smoothstep(0.22, 0.8, fbm(p * 0.5 + vec2(uTime * 0.05, -uTime * 0.03)) * 0.7 + fbm(p * 1.3 - vec2(uTime * 0.08, 0.0)) * 0.4);   // 물 위에 낮게 깔린 김
+          vec3 steamCol = vec3(0.26, 0.3, 0.38) * (0.4 + 0.6 * uMoon) + uLampCol * 0.18 / (1.0 + lampD * lampD * 0.1);
+          col = mix(col, steamCol, mist * 0.5 * smoothstep(0.6, 3.0, dist));
+          gl_FragColor = vec4(col, 1.0);
+        }`
+    }), cx, SPRING.WATER, cz);
     water.rotation.x = -Math.PI / 2;
-    for (let i = 0; i < 16; i++) {   // 물가 돌 (몇 개는 눈이 쌓여 있어요)
-      const a = i / 16 * Math.PI * 2 + rand() * 0.15, sz = 0.42 + rand() * 0.3;
-      const rx = cx + Math.cos(a) * 4.85, rz = cz + Math.sin(a) * 4.85;
-      addMesh(new THREE.DodecahedronGeometry(sz, 0), MAT.stone, rx, sz * 0.45, rz).rotation.set(rand() * 3, rand() * 3, 0);
-      if (i % 3 === 0) addMesh(new THREE.SphereGeometry(sz * 0.62, 8, 6), MAT.snow, rx, sz * 1.02, rz).scale.y = 0.5;
-    }
+
+    // (2) 물가 바위: 위가 조금 납작한 둥근 바위를 둘러 하나로 합쳐 그려요. 물에 닿는 아래와 김이 닿는 안쪽은 젖어 어둡고, 눈은 바깥쪽 윗면에만 (안쪽은 김에 녹았어요)
+    (function rimRocks() {
+      const rp = [], rc = [], n = 22, back = 9, SNOW = [0.82, 0.86, 0.96];
+      for (let i = 0; i < n + back; i++) {
+        const behind = i >= n, a = (behind ? (i - n + sr()) / back : i / n) * Math.PI * 2 + (sr() - 0.5) * 0.12;   // 앞줄은 물가를 빙 두르고, 뒷줄은 띄엄띄엄 더 크게
+        const sz = behind ? 0.7 + sr() * 0.5 : 0.36 + Math.pow(sr(), 1.6) * 0.62, rad = SPRING.RIM + sz * 0.55 + (sr() - 0.5) * 0.15 + (behind ? 0.75 : 0);
+        const flat = 0.22 + sr() * 0.22, tall = 0.55 + sr() * 0.35;
+        const x0 = cx + Math.cos(a) * rad, z0 = cz + Math.sin(a) * rad, toC = Math.hypot(cx - x0, cz - z0);
+        const geo = new THREE.IcosahedronGeometry(sz, 3), ps = geo.attributes.position, sd = sr() * 10, tilt = sr() * 6.28;
+        for (let j = 0; j < ps.count; j++) {
+          const vx = ps.getX(j), vy = ps.getY(j), vz = ps.getZ(j);
+          const k = 1 + 0.17 * Math.sin(vx * 3.7 / sz + sd) * Math.sin(vy * 3.1 / sz + sd * 1.3) * Math.sin(vz * 4.3 / sz + sd * 0.7) + 0.06 * Math.sin((vx * 12 + vz * 10) / sz + sd) + 0.035 * Math.sin((vy * 19 - vx * 7) / sz + sd * 2.1);
+          let ly = vy * k * tall;
+          if (ly > sz * flat) ly = sz * flat + (ly - sz * flat) * 0.35;   // 위가 조금 납작해요 (바위마다 다르게)
+          const lx = vx * k * 1.35, lz = vz * k * 1.1;
+          const wx = x0 + lx * Math.cos(tilt) - lz * Math.sin(tilt), wz = z0 + lx * Math.sin(tilt) + lz * Math.cos(tilt), y = SPRING.WATER + sz * 0.12 + ly;
+          rp.push(wx, y, wz);
+          const up = vy / sz, side = ((wx - x0) * (cx - x0) + (wz - z0) * (cz - z0)) / (toC * sz);   // side +: 물 쪽을 봄
+          const g = 0.11 + 0.04 * Math.sin(vx * 17 / sz + sd) * Math.sin(vz * 13 / sz) + 0.025 * Math.sin(vy * 23 / sz + sd) + 0.02 * up;
+          let c = [g * 0.96, g * 0.97, g * 1.04];
+          if (y < SPRING.WATER + 0.16 || side > 0.25) c = [c[0] * 0.6, c[1] * 0.63, c[2] * 0.7];
+          const snowy = Math.max(up > 0.25 && side < 0.15 ? Math.min(1, (up - 0.25) * 3.5) * Math.min(1, (0.15 - side) * 3) : 0,
+                                 up > 0.6 && side < 0.55 ? Math.min(1, (up - 0.6) * 5) * Math.min(1, (0.55 - side) * 4) : 0);   // 바깥쪽과 납작한 윗면에 눈 (물 쪽 가장자리는 김에 녹았어요)
+          rc.push(c[0] + (SNOW[0] - c[0]) * snowy, c[1] + (SNOW[1] - c[1]) * snowy, c[2] + (SNOW[2] - c[2]) * snowy);
+        }
+        geo.dispose();
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(rp, 3));
+      g.setAttribute("color", new THREE.Float32BufferAttribute(rc, 3));
+      g.computeVertexNormals();
+      smoothByPosition(g);
+      addMesh(g, new THREE.MeshLambertMaterial({ vertexColors: true }), 0, 0, 0);
+      console.log("[🪨 spring] 물가 바위 -> 앞줄", n, "+ 뒷줄", back, "개 | 점:", rp.length / 3);
+    })();
     colliders.push({ x: cx, z: cz, r: 5.1 });   // 걸어서는 못 들어가고, E로만 들어가요
     for (let i = 0; i < 5; i++) {
       const a = i / 5 * Math.PI * 2 + 0.3, sx = cx + Math.cos(a) * 3.4, sz = cz + Math.sin(a) * 3.4;
-      seats.push({ x: sx, z: sz, heading: Math.atan2(cx - sx, cz - sz), y: -0.55, out: -2.55, kind: "soak", reach: 5.2 });   // y가 음수 = 물에 잠김
+      seats.push({ x: sx, z: sz, heading: Math.atan2(cx - sx, cz - sz), y: -0.55, out: -2.55, kind: "soak", reach: 5.2, lookUp: 0.09,   // y가 음수 = 물에 잠김. 고개를 조금 들어 김 너머 산이 보이게
+        note: "♨️ 김 너머로 눈 덮인 산 · 눈송이가 물에 닿아 사라져요 · 끌어서 둘러보기 · B 숨 흔들림" });
     }
-    const puff = radialTexture([[0, "rgba(235,245,255,0.6)"], [1, "rgba(235,245,255,0)"]]);
-    for (let i = 0; i < 10; i++) {   // 김
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: puff, transparent: true, depthWrite: false, opacity: 0 }));
-      scene.add(sp);
-      spring.steam.push({ sprite: sp, life: i / 10 * 6, a: rand() * 6.28, r: rand() * 3.4 });
-    }
-    const glow = new THREE.PointLight(0x9fe6e6, 0.55, 18, 2);
-    glow.position.set(cx, 3.2, cz); scene.add(glow);
+
+    // (3) 김: 물 위 여기저기서 피어올라 바람에 살짝 밀리며 흩어져요. 판 24장을 한 번에 그리고, 판은 늘 나를 향해 돌아요
+    (function buildSteam() {
+      const N = 24, pos = [], kk = [], szs = [], sds = [], idx = [];
+      for (let i = 0; i < N; i++) {
+        const a = sr() * 6.283, r = Math.sqrt(sr()) * 3.6, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+        const w = 1.8 + sr() * 1.6, h = 1.3 + sr() * 1.4, seed = sr();
+        [[-1, 0], [1, 0], [1, 1], [-1, 1]].forEach(function (k) { pos.push(x, SPRING.WATER, z); kk.push(k[0], k[1]); szs.push(w, h); sds.push(seed); });
+        idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute("aK", new THREE.Float32BufferAttribute(kk, 2));
+      g.setAttribute("aSz", new THREE.Float32BufferAttribute(szs, 2));
+      g.setAttribute("aSeed", new THREE.Float32BufferAttribute(sds, 1));
+      g.setIndex(idx);
+      const m = new THREE.Mesh(g, new THREE.ShaderMaterial({
+        uniforms: u, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+        vertexShader: `
+          attribute vec2 aK; attribute vec2 aSz; attribute float aSeed;
+          uniform float uTime;
+          varying vec2 vUv; varying float vSeed; varying vec3 vW;
+          void main() {
+            vec3 to = cameraPosition - position; to.y = 0.0;
+            vec3 f = normalize(to + vec3(1e-4, 0.0, 0.0)), right = vec3(f.z, 0.0, -f.x);
+            float sway = sin(uTime * 0.13 + aSeed * 20.0) * 0.35;
+            vec3 pos = position + right * aK.x * aSz.x * (0.4 + 0.35 * aK.y) + vec3(0.0, aK.y * aSz.y, 0.0) + vec3(0.55 + sway, 0.0, 0.25) * aK.y * aK.y;   // 위로 갈수록 넓게 퍼져요
+            vUv = vec2(aK.x * 0.5 + 0.5, aK.y); vSeed = aSeed; vW = pos;
+            gl_Position = projectionMatrix * viewMatrix * vec4(pos, 1.0);
+          }`,
+        fragmentShader: SCOMMON + `
+          varying vec2 vUv; varying float vSeed;
+          void main() {
+            float rise = uTime * (0.16 + 0.08 * vSeed);
+            vec2 st = vec2(vUv.x * 2.2 + vSeed * 13.0, vUv.y * 1.6 - rise);
+            vec2 warp = vec2(fbm(st * 1.3 + vec2(0.0, uTime * 0.05)), fbm(st * 1.3 + 5.2 - vec2(uTime * 0.04, 0.0))) - 0.5;   // 소용돌이
+            float n = fbm(st + warp * 1.6) * 0.7 + fbm(st * 2.7 + warp * 2.4 + 3.3) * 0.4;
+            float shape = pow(sin(3.14159 * vUv.x), 2.0) * smoothstep(0.0, 0.08, vUv.y) * pow(1.0 - vUv.y, 1.6);   // 물 위가 가장 짙고 올라가며 흩어져요
+            float a = smoothstep(0.32, 0.8, n) * shape * (0.6 + 0.4 * sin(uTime * 0.17 + vSeed * 30.0));
+            a *= smoothstep(0.5, 2.4, length(cameraPosition - vW));   // 바로 눈앞의 김은 옅게
+            float ld = length(vW - uLamp);
+            vec3 col = vec3(0.52, 0.57, 0.68) * (0.3 + 0.7 * uMoon) + uLampCol * 0.8 / (1.0 + ld * ld * 0.3);
+            gl_FragColor = vec4(col, a * 0.55);
+          }`
+      }));
+      m.frustumCulled = false; m.renderOrder = 2;
+      scene.add(m);
+      spring.steam = m;
+    })();
+
+    // (4) 작은 등불: 물가 바위 뒤 나무 기둥 위. 따뜻한 빛이 김과 물에 비쳐요 (불빛은 흔들리지 않게)
+    (function springLamp() {
+      const lx = LAMP.x, lz = LAMP.z, post = lambert(0x2a2420), frame = lambert(0x1b1a1c);
+      addMesh(new THREE.BoxGeometry(0.1, 1.0, 0.1), post, lx, 0.5, lz);
+      addMesh(new THREE.BoxGeometry(0.3, 0.04, 0.3), post, lx, 1.02, lz);
+      [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (q) { addMesh(new THREE.BoxGeometry(0.025, 0.3, 0.025), frame, lx + q[0] * 0.115, 1.19, lz + q[1] * 0.115); });
+      addMesh(new THREE.BoxGeometry(0.21, 0.27, 0.21), new THREE.MeshBasicMaterial({ color: 0xffcf8a }), lx, 1.19, lz);
+      addMesh(new THREE.ConeGeometry(0.24, 0.16, 4), frame, lx, 1.42, lz).rotation.y = Math.PI / 4;
+      addMesh(new THREE.SphereGeometry(0.15, 10, 6), MAT.snow, lx, 1.47, lz).scale.set(1.1, 0.35, 1.1);   // 지붕 위 눈
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialTexture([[0, "rgba(255,190,120,0.55)"], [0.3, "rgba(255,160,90,0.14)"], [1, "rgba(255,150,80,0)"]]), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+      glow.position.copy(LAMP); glow.scale.set(1.6, 1.6, 1); scene.add(glow);
+      const light = new THREE.PointLight(0xffb870, 0.7, 14, 2);   // 예전 푸른 빛 대신 (빛 개수는 그대로)
+      light.position.set(lx, 1.25, lz); scene.add(light);
+      colliders.push({ x: lx, z: lz, r: 0.3 });
+      spring.lamp = light;
+    })();
+
+    // (5) 김 너머 설산: 온천 둘레를 빙 둘러요. 북쪽이 가장 높고(달빛을 정면으로 받아 하얗게), 달이 있는 남쪽은 낮게 해서 달이 산 위에 떠 보여요. 온천에 있을 때만 그려요
+    (function buildPeaks() {
+      const FLOORY = -60, MOON_AZ = Math.atan2(Math.sin(-0.21), -Math.cos(-0.21)), mx = Math.sin(-0.21), mz = Math.cos(-0.21);
+      function loopNoise(seed, P) {   // 한 바퀴 돌면 처음과 이어지는 잡음 (산 둘레에 이음매가 안 생겨요)
+        const r = mulberry32(seed), v = [];
+        for (let i = 0; i < P; i++) v.push(r());
+        return function (t) { const x = t * P, i = Math.floor(x), f = x - i, s = f * f * (3 - 2 * f); return v[((i % P) + P) % P] * (1 - s) + v[(((i + 1) % P) + P) % P] * s; };
+      }
+      const LAYERS = [
+        { R: 430, lo: 3, hi: 11, haze: 0.16, mist: 0.75, seed: 61, f: 0.016 },
+        { R: 580, lo: 6, hi: 18, haze: 0.22, mist: 0.7, seed: 73, f: 0.012 },
+        { R: 760, lo: 9, hi: 26, haze: 0.29, mist: 0.6, seed: 89, f: 0.0095 },
+        { R: 960, lo: 12, hi: 31, haze: 0.37, mist: 0.5, seed: 97, f: 0.0075 }
+      ];
+      LAYERS.forEach(function (L, li) {
+        const P0 = Math.max(8, Math.round(2 * Math.PI * L.R * L.f));
+        const o1 = loopNoise(L.seed, P0), o2 = loopNoise(L.seed + 1, Math.round(P0 * 2.3)), o3 = loopNoise(L.seed + 2, Math.round(P0 * 6.1)), o4 = loopNoise(L.seed + 3, Math.round(P0 * 17));
+        const N = 720, tops = [];
+        for (let i = 0; i <= N; i++) {
+          const t = i / N, phi = -Math.PI + 2 * Math.PI * t;
+          const n = (1 - Math.abs(2 * o1(t) - 1)) * 0.5 + (1 - Math.abs(2 * o2(t) - 1)) * 0.28 + o3(t) * 0.15 + o4(t) * 0.07;   // 뾰족한 봉우리 (능선 잡음)
+          let dm = phi - MOON_AZ; dm = Math.atan2(Math.sin(dm), Math.cos(dm));
+          const massif = (0.3 + 0.7 * Math.pow(0.5 + 0.5 * Math.cos(phi - 0.35), 0.7)) * (1 - 0.55 * Math.exp(-dm * dm / 0.2));
+          tops.push(L.R * Math.tan((L.lo + (L.hi - L.lo) * Math.pow(n, 1.5)) * massif * Math.PI / 180));
+        }
+        const pos = [], hh = [], ss = [], tt = [], uu = [], idx = [], dA = 2 * Math.PI * L.R / N, W = 6;
+        function topAt(i) { return tops[((i % N) + N) % N]; }
+        function smoothTop(i) { let v = 0; for (let k = -W; k <= W; k++) v += topAt(i + k); return v / (2 * W + 1); }   // 능선을 부드럽게 편 높이 (비탈 방향만 여기서 읽어요)
+        for (let i = 0; i <= N; i++) {
+          const phi = -Math.PI + 2 * Math.PI * i / N, x = cx + Math.sin(phi) * L.R, z = cz - Math.cos(phi) * L.R;
+          const slope = (smoothTop(i + 2) - smoothTop(i - 2)) / (4 * dA), along = phi * L.R;
+          pos.push(x, FLOORY, z, x, tops[i], z); hh.push(0, 1); ss.push(slope, slope); tt.push(tops[i], tops[i]); uu.push(along, along);
+          if (i < N) { const b = i * 2; idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3); }
+          peaks.tops.push([phi, Math.atan2(tops[i] - SPRING.WATER, L.R), Math.min(1, Math.max(0, -(Math.sin(phi) * mx - Math.cos(phi) * mz) * 0.75 + 0.3))]);
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+        g.setAttribute("aH", new THREE.Float32BufferAttribute(hh, 1));
+        g.setAttribute("aS", new THREE.Float32BufferAttribute(ss, 1));
+        g.setAttribute("aTop", new THREE.Float32BufferAttribute(tt, 1));
+        g.setAttribute("aU", new THREE.Float32BufferAttribute(uu, 1));
+        g.setIndex(idx);
+        const m = new THREE.Mesh(g, vistaMat({ uHaze: { value: new THREE.Color(0x283858) }, uFar: { value: L.haze }, uMist: { value: L.mist }, uC: { value: u.uC.value }, uMoonDir: { value: new THREE.Vector3(0, 0.2, 1).normalize() } },
+          "attribute float aH; attribute float aS; attribute float aTop; attribute float aU; varying float vH; varying float vS; varying float vTop; varying float vU; varying vec3 vW; void main() { vH = aH; vS = aS; vTop = aTop; vU = aU; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }",
+          VISTA_NOISE + `
+            uniform vec3 uBg; uniform vec3 uHaze; uniform vec3 uMoonDir; uniform float uFar; uniform float uMist; uniform float uVista; uniform vec2 uC;
+            varying float vH; varying float vS; varying float vTop; varying float vU; varying vec3 vW;
+            float ridgeH(vec2 q) {   // 등성이가 뾰족한 잡음 높이 (큰 덩어리 + 중간 + 잔 결)
+              float a = n2(q * 0.006), b = n2(q * 0.017 + 3.1), c = n2(q * 0.05 + 7.3);
+              return (1.0 - abs(2.0 * a - 1.0)) * 0.55 + (1.0 - abs(2.0 * b - 1.0)) * 0.3 + c * 0.15;
+            }
+            void main() {
+              vec2 rad = normalize(vW.xz - uC), tang = vec2(-rad.y, rad.x);
+              vec3 out3 = vec3(-rad.x, 0.0, -rad.y), t3 = vec3(tang.x, 0.0, tang.y), up = vec3(0.0, 1.0, 0.0);
+              float below = vTop - vW.y, depth = smoothstep(0.0, 0.3, below / max(vTop + 60.0, 1.0));
+              // 멀리서 본 산비탈의 등성이와 골짜기: 잡음으로 만든 높이의 기울기로 비탈이 향하는 방향을 정해요
+              vec2 q = vec2(vU, vW.y * 0.55);   // 세로로 긴 등성이와 골짜기 (비탈을 따라 흘러내린 모양)
+              float h0 = ridgeH(q), hu = ridgeH(q + vec2(3.0, 0.0)), hy = ridgeH(q + vec2(0.0, 3.0));
+              vec2 g = vec2(hu - h0, hy - h0) / 3.0;
+              vec3 N0 = normalize(out3 * 0.77 + up * 0.64), upP = normalize(-out3 * 0.64 + up * 0.77);   // 기본 비탈: 40도쯤 뒤로 누운 면, 그 면 위의 '위쪽'
+              float sideR = clamp(-vS * 1.4, -1.0, 1.0) * (1.0 - depth);   // 능선 바로 아래는 능선이 기우는 쪽을 봐요
+              vec3 N = normalize(N0 - t3 * (g.x * 55.0 - sideR * 0.8) - upP * g.y * 40.0);
+              float lit = pow(clamp(dot(N, uMoonDir), 0.0, 1.0), 1.3);   // 낮게 뜬 달빛을 정면으로 받는 가파른 비탈이 가장 밝아요
+              float fine = n2(vec2(vU * 0.12, vW.y * 0.09)) * 0.6 + n2(vec2(vU * 0.35, vW.y * 0.25)) * 0.4;
+              lit *= 0.82 + 0.3 * fine;                                   // 눈 표면의 잔 결 (빛만 살짝)
+              float steep = 1.0 - dot(N, up);
+              float rn = n2(vec2(vU * 0.06, vW.y * 0.009)) * 0.7 + n2(vec2(vU * 0.19, vW.y * 0.03)) * 0.3;
+              float rock = smoothstep(0.66, 0.8, rn * 0.75 + steep * 0.45 - 0.05) * smoothstep(1.0, 8.0, below) * (1.0 - 0.5 * depth);   // 봉우리에서 흘러내린 바위 줄기 (가파를수록 눈이 덜 붙어요)
+              float treeLine = vTop * 0.35 + 25.0 * (n2(vec2(vU * 0.03, 1.0)) - 0.5);
+              float forest = 1.0 - smoothstep(treeLine - 10.0, treeLine + 18.0, vW.y);   // 아래쪽은 짙은 숲
+              vec3 snowC = vec3(0.68, 0.74, 0.88) * (0.09 + 0.91 * lit);
+              vec3 col = mix(snowC, vec3(0.08, 0.088, 0.105) * (0.45 + 0.55 * lit), rock * 0.7);
+              col = mix(col, vec3(0.012, 0.018, 0.026), forest);
+              col += vec3(0.05, 0.06, 0.08) * exp(-below * 0.35) * (1.0 - lit);   // 달 반대쪽 능선 가장자리가 희미하게 빛나요
+              float mist = pow(1.0 - smoothstep(0.0, 0.75, vH), 1.5) * uMist;
+              col = mix(col, uHaze, clamp(uFar + mist * (1.0 - uFar), 0.0, 1.0));
+              gl_FragColor = vec4(mix(uBg, col, uVista), 1.0);
+            }`, { side: THREE.DoubleSide }, peaks));
+        m.frustumCulled = false;
+        m.renderOrder = -1 - li;
+        peaks.group.add(m);
+      });
+      console.log("[🏔️ peaks] 온천 둘레 설산 ->", LAYERS.length, "겹 | 가장 높은 봉우리 높이각(도):", (Math.max.apply(null, peaks.tops.map(function (q) { return q[1]; })) * 180 / Math.PI).toFixed(1));
+    })();
+
     addMesh(new THREE.CylinderGeometry(0.34, 0.28, 0.42, 10), MAT.wood, cx - 5.9, 0.21, cz + 0.8);   // 나무 물통
     colliders.push({ x: cx - 5.9, z: cz + 0.8, r: 0.4 });
     makeBench(cx + 2.2, cz - 7.2, Math.atan2(-2.2, 7.2));   // 온천을 바라보는 벤치
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 8; i++) {   // 예전 둘레 나무 자리 (지금은 springView 빈터라 안 심겨요. 씨앗 순서를 지키려고 남겨 둬요)
       const a = 1.92 + i / 7 * 2.44 + (rand() - 0.5) * 0.2, r = Z.r + 2.8 + rand() * 4;
       const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
-      if (tz > D - 2) continue;   // 모래사장 쪽은 비워서 바다가 보이게
+      if (tz > D - 2) continue;
       makeTree(tx, tz, 0.9 + rand() * 0.6);
     }
     Z.gates.forEach(function (gt) { makeZoneSign(Z, gt); });
-    console.log("[♨️ spring] 온천 -> 물 반지름 4.4 + 돌 16 + 담그는 자리", 5, "곳 + 김", spring.steam.length, "개 | 위치:", cx, cz);
+    console.log("[♨️ spring] 온천 -> 물 셰이더(반지름", SPRING.RIM + 0.4, ") + 김 판 24 + 등불 + 담그는 자리 5 | 위치:", cx, cz);
   })();
+  function bakeSpringSkyline() {   // 온천 물에 비칠 둘레 윤곽: 방향마다 숲과 먼 산이 얼마나 높이 보이는지 (온천 가운데에서 잰 높이각)
+    const S = spring.sky, N = S.N, mt = new Float32Array(N), tr = new Float32Array(N), lit = new Float32Array(N), TAU = Math.PI * 2;
+    peaks.tops.forEach(function (q) {
+      const i = Math.floor((q[0] / TAU + 0.5) * N) % N;
+      if (q[1] > mt[i]) { mt[i] = q[1]; lit[i] = q[2]; }
+    });
+    let near = 0;
+    treeSpots.forEach(function (t) {
+      const dx = t.x - spring.x, dz = t.z - spring.z, d = Math.hypot(dx, dz);
+      if (d > 140) return;
+      near++;
+      const el = Math.atan2(6.6 * t.s - SPRING.WATER, d), hw = Math.atan2(2.0 * t.s, d), az = Math.atan2(dx, -dz);
+      for (let i = Math.floor((az - hw) / TAU * N); i <= Math.ceil((az + hw) / TAU * N); i++) {
+        const k = ((i + N / 2) % N + N) % N, e = el * Math.max(0, 1 - Math.abs(i / N * TAU - az) / hw * 0.85);
+        if (e > tr[k]) tr[k] = e;
+      }
+    });
+    for (let i = 0; i < N; i++) {
+      S.data[i * 4] = Math.min(255, mt[i] / 0.6 * 255); S.data[i * 4 + 1] = Math.min(255, tr[i] / 0.6 * 255);
+      S.data[i * 4 + 2] = lit[i] * 255; S.data[i * 4 + 3] = 255;
+    }
+    S.tex.needsUpdate = true;
+    console.log("[♨️ spring] 물에 비칠 둘레 윤곽 -> 방향", N, "칸 | 가까운 나무", near, "그루 + 설산");
+  }
 
   // ---- 🎐 풍경 나무: 큰 나무에 풍경 8개. 아래를 지나가거나 누르면 울려요 ----
   const chimes = { list: [], meshes: [], windIn: 4, x: ZONES[8].x, z: ZONES[8].z };
@@ -2189,6 +2621,7 @@
     console.log("[🌲 ring] 구역 둘레 숲 울타리 -> 나무", made, "그루");
   })();
   plantTrees();   // 여기까지 모은 나무를 한꺼번에 심기
+  bakeSpringSkyline();   // 온천 물에 비칠 둘레 윤곽 (나무 자리가 다 정해진 뒤에)
 
   // ---- ❄️ 눈: 내 주변에만 내리고, 내가 걸으면 따라와요 ----
   const snow = { points: null, data: [], R: 34, H: 24, fade: 1 };
@@ -3825,7 +4258,7 @@
   const printState = { i: 0, me: null };
   const _pd = new THREE.Object3D();
   function snowAt(x, z) {   // 발자국이 남는 곳: 눈밭·광장·눈길 (다른 구역 바닥, 다리, 개울, 절벽 밖은 빼요)
-    if (groundHeightAt(x, z) > 0.05 || overCliff(x, z, 0.5)) return false;
+    if (groundHeightAt(x, z) > 0.05 || overCliff(x, z, 0.5) || rainView(x, z)) return false;   // 비 오는 숲 바닥은 젖은 흙이라 발자국 없음
     for (let i = 1; i < ZONES.length; i++) { const zn = ZONES[i]; if (zn.id === "beach" && z < SEA_Z - SURF.RUN * 1.3 - 1.6) continue; if (Math.hypot(x - zn.x, z - zn.z) < zn.r + 0.5) return false; }   // 해변은 눈이 덮인 곳까지 발자국이 남아요
     for (let i = 0; i < streamLine.length; i++) if (Math.hypot(x - streamLine[i][0], z - streamLine[i][1]) < 2.6) return false;
     return true;
@@ -4580,16 +5013,12 @@
     btnPush.hidden = !mallow.on || mallow.burning > 0 || mallow.inspect >= 0;
   }
 
-  function updateSpring(dt) {   // 김이 천천히 오르며 퍼졌다 사라져요
-    for (let i = 0; i < spring.steam.length; i++) {
-      const sm = spring.steam[i];
-      sm.life += dt;
-      if (sm.life > 6) { sm.life -= 6; sm.a = Math.random() * 6.28; sm.r = Math.random() * 3.6; }
-      const k = sm.life / 6;
-      sm.sprite.position.set(spring.x + Math.cos(sm.a) * sm.r + k * 0.8, 0.5 + k * 4.2, spring.z + Math.sin(sm.a) * sm.r);
-      sm.sprite.scale.setScalar(1.3 + k * 2.6);
-      sm.sprite.material.opacity = Math.sin(k * Math.PI) * 0.2;
-    }
+  function updateSpring(dt) {   // 물결·김 시간, 하늘색, 달 방향을 셰이더에 넘겨요
+    const t = performance.now() / 1000 % 1000, u = spring.u, near = Math.hypot(player.pos.x - spring.x, player.pos.z - spring.z) < 90;
+    u.uTime.value = t;
+    u.uBg.value.copy(ambient.color); u.uZenith.value.copy(ambient.color).multiplyScalar(0.3);
+    u.uMoon.value = Math.min(1, ambient.stars); u.uMoonDir.value.copy(sky.moonDir);
+    spring.steam.visible = near;
   }
   function ringChime(ch, vol, how) {
     ch.swing = Math.min(0.5, ch.swing + 0.1 + 0.32 * vol);
@@ -4633,6 +5062,20 @@
   }
 
   function updateRain(dt) {
+    rain.lines.visible = state.zone !== "spring";   // 온천에 몸을 담그면 먼 숲의 빗줄기가 설산 앞에 보이지 않게
+    rain.cover = clamp((70 - Math.hypot(player.pos.x - rain.roof.x, player.pos.z - rain.roof.z)) / 16, 0, 1);   // 정자에서 54 m 안이면 1 (큰 나무·구름)
+    rain.u.uTime.value = performance.now() / 1000 % 1000;
+    rain.u.uSky.value.copy(ambient.color);
+    const da = rain.dripLines.geometry.attributes.position.array;
+    for (let i = 0; i < rain.drips.length; i++) {   // 처마 물방울: 맺혀 있다가 떨어지며 점점 빨라져요
+      const q = rain.drips[i], k = i * 6;
+      if (q.wait > 0) { q.wait -= dt; q.y = 3.12; q.v = 0; }
+      else { q.v += 9.8 * dt; q.y -= q.v * dt; if (q.y < 0.1) { q.wait = 0.25 + Math.random() * 0.9; } }
+      const len = q.wait > 0 ? 0 : Math.min(0.5, 0.03 + q.v * 0.03);
+      da[k] = q.x; da[k + 1] = q.y; da[k + 2] = q.z; da[k + 3] = q.x; da[k + 4] = q.y + len; da[k + 5] = q.z;
+    }
+    rain.dripLines.geometry.attributes.position.needsUpdate = true;
+    rain.dripLines.visible = rain.cover > 0;
     const arr = rain.lines.geometry.attributes.position.array;
     const R = rain.roof;
     for (let i = 0; i < rain.data.length; i++) {
@@ -4666,8 +5109,8 @@
     u.uStars.value = ambient.stars;
     sky.stars.material.uniforms.uTime.value = t % 1000;
     sky.stars.material.uniforms.uStars.value = ambient.stars;
-    sky.moon.material.opacity = 0.35 + 0.65 * Math.min(1, ambient.stars);
-    sky.halo.material.opacity = Math.min(1, ambient.stars);
+    sky.moon.material.opacity = (0.35 + 0.65 * Math.min(1, ambient.stars)) * (1 - rain.cover);   // 비 오는 숲에서는 구름 뒤로
+    sky.halo.material.opacity = Math.min(1, ambient.stars) * (1 - rain.cover);
     // 유성우: 시계로 정한 시간이거나 #meteors 시험 중이면, 처음엔 드문드문 -> 가운데쯤 제일 많이 -> 다시 드문드문
     const now = Date.now() / 1000;
     let sh = showerFor(now);
@@ -4719,7 +5162,7 @@
   }
 
   // 구역을 옮기면 하늘색·안개·별 밝기가 천천히 바뀌어요 (비 오는 숲은 흐리고 어둡게)
-  const ambient = { color: new THREE.Color(0x141a3a), near: 40, far: 120, air: 0, stars: 1, glow: new THREE.Color(0), vista: 0, light: 1 };
+  const ambient = { color: new THREE.Color(0x141a3a), near: 40, far: 120, air: 0, stars: 1, glow: new THREE.Color(0), vista: 0, peaks: 0, light: 1 };
   const tmpColor = new THREE.Color();
   let dimLevel = 1;   // 1 = 평소 밝기, 작을수록 주변이 어두움
   function updateAmbient(dt) {
@@ -4731,6 +5174,7 @@
     ambient.stars += (a.stars - ambient.stars) * k;
     ambient.glow.lerp(tmpColor.set(a.glow || 0x0b0e1a), k);
     ambient.vista += ((a.vista || 0) - ambient.vista) * k;
+    ambient.peaks += ((a.peaks || 0) - ambient.peaks) * k;
     ambient.light += ((a.light || 1) - ambient.light) * k;
     scene.background.copy(ambient.color);
     scene.fog.color.copy(ambient.color);
@@ -4873,7 +5317,7 @@
   // 🧪 시험 손잡이: tools/ 시험 대본이 게임 상태를 읽는 곳이에요. 화면과 동작은 바꾸지 않아요.
   window.__soft = {
     state: state, player: player, cam: cam, fire: fire, mallow: mallow, sprinkle: sprinkle, ashes: ashes,
-    net: net, others: others, printBorn: printBorn, LOOK_LIMIT: LOOK_LIMIT, renderer: renderer, scene: scene, breath: breath, seats: seats,
+    net: net, others: others, printBorn: printBorn, LOOK_LIMIT: LOOK_LIMIT, renderer: renderer, scene: scene, breath: breath, seats: seats, spring: spring, peaks: peaks, rain: rain, grove: grove, sky: sky,
     get audio() { return audio; },
     get frame() { return frame; },
     sound: {   // 소리 시험: 소리 엔진을 잠깐 OfflineAudioContext로 바꿔 끼우고 소리 함수를 불러 크기를 재요
