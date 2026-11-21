@@ -34,6 +34,7 @@ const WAIT_MS = Number(process.env.SP_WAIT_MS) || 120000;
 const FIRE_SEAT = { x: 0, z: -86.2, yaw: 0 };    // 모닥불 앞 통나무 (E 누르면 불멍)
 const VIEW_SEAT = { x: 3, z: -96, yaw: 0 };      // 캠핑장 절벽 전망 자리
 const PLAZA = { x: -4, z: 6, yaw: 0.6 };         // 중앙 광장 (눈이라 발자국이 남아요)
+const BEACH_BENCH = { x: 4, z: 81.8, yaw: 0 };   // 파도 해변 벤치 앞 (E 누르면 바다를 보고 앉아요)
 
 // ---------- 작은 웹 서버: 저장소 폴더를 그대로 보여 줘요 ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript', '.jpg': 'image/jpeg', '.png': 'image/png', '.json': 'application/json' };
@@ -298,6 +299,37 @@ const tests = {
       check(t, s.pitch >= -s.lim[1] - 1e-6 && s.pitch <= s.lim[2] + 1e-6, '위아래도 정해진 만큼만', s);
       await shot(t, p, 'look');
       await ctx.close();
+    },
+  },
+
+  seats: {
+    what: '앉은 자리 1인칭: 해변 벤치는 내 눈으로 보고(눈사람·글씨 숨김), B로 숨 흔들림 끄고 켜고, 수다 마당 그루터기는 3인칭 그대로',
+    run: async t => {
+      const ctx = await newContext();
+      const p = await open(ctx, t, BEACH_BENCH);
+      await p.click('#btnSound');   // 파도 소리(화면 파도와 같은 박자)도 같이 돌려 봐요
+      await until(p, () => !!window.__soft.audio, null, '소리 엔진 켜기');
+      await sit(p, 'sit');
+      await until(p, () => window.__soft.cam.pos.y > 1.2 && window.__soft.cam.pos.y < 1.9, null, '눈높이로 카메라 옮기기');
+      const s = await p.evaluate(() => ({ watching: document.body.classList.contains('watching'), hidden: !window.__soft.player.parts.group.visible, y: +window.__soft.cam.pos.y.toFixed(2) }));
+      check(t, s.watching && s.hidden, '해변 벤치에 앉으면 1인칭 (눈사람과 화면 글씨 숨김)', s);
+      const b0 = await p.evaluate(() => window.__soft.breath.on);
+      await press(p, 'KeyB');
+      check(t, (await p.evaluate(() => window.__soft.breath.on)) === !b0, 'B로 숨 흔들림 ' + (b0 ? '끄기' : '켜기'));
+      await press(p, 'KeyB');
+      check(t, (await p.evaluate(() => window.__soft.breath.on)) === b0, 'B를 한 번 더 누르면 돌아옴');
+      await frames(p, 5);
+      await shot(t, p, 'beach');
+      const stump = await p.evaluate(() => { const st = window.__soft.seats.find(x => x.third); return st && { x: st.x + Math.sin(st.heading) * 1.3, z: st.z + Math.cos(st.heading) * 1.3 }; });
+      check(t, !!stump, '3인칭으로 남긴 자리(그루터기)가 있음');
+      await ctx.close();
+      const ctx2 = await newContext();
+      const q = await open(ctx2, t, { x: stump.x, z: stump.z, yaw: 0 });
+      await sit(q, 'sit');
+      await frames(q, 3);
+      const r = await q.evaluate(() => ({ third: !!window.__soft.player.seat.third, watching: document.body.classList.contains('watching'), shown: window.__soft.player.parts.group.visible }));
+      check(t, r.third && !r.watching && r.shown, '그루터기는 3인칭 (내 눈사람이 보임)', r);
+      await ctx2.close();
     },
   },
 

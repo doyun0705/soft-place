@@ -45,6 +45,7 @@ SP_THREE=node_modules/three/build/three.min.js node tools/play-check.js --gl=swi
 | fire | E로 불멍, Q로 마시멜로, 탄 걸 먹으면 재 연기. 진짜 소리 엔진도 같이 돌려서 오류를 봄 |
 | element | 원소(Cu)를 넣으면 뿌리기 → 불이 휙 커짐 → 원래대로, 불빛에 색 |
 | seatLook | 전망 자리에서 끌면 고개가 돌고, 정해진 각도까지만 |
+| seats | 해변 벤치는 1인칭(눈사람·글씨 숨김, 눈높이), B로 숨 흔들림 끄고 켜기, 그루터기는 3인칭 그대로. 파도 소리도 같이 돌림 |
 | rooms | 같은 브라우저 탭 4개: 방 만들기, 소문자 코드로 들어가기, 아무 방이나 둘이 만나기, 혼자로 바꾸면 사라지기, 사람 수 누르면 코드 |
 | sound | 소리 함수를 `OfflineAudioContext`로 그려서 크기(RMS)를 잼. 모닥불(약 0.06~0.09)에 안 묻히는지 |
 
