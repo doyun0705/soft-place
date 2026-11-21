@@ -42,12 +42,20 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: 첫 화면과 이동, 공중샷 확인
+      - name: 기본 플레이와 1인칭 자리 확인
         id: play
         if: steps.script.outputs.available == 'true'
         env:
           SP_THREE: ${{ github.workspace }}/tools/node_modules/three/build/three.min.js
-        run: node tools/play-check.js panel,walk,aerial --gl=swiftshader --offline
+        run: |
+          available="$(node tools/play-check.js --list)"
+          tests="panel,walk,aerial"
+          while read -r scenario _; do
+            case "$scenario" in
+              seats|spring|rain) tests="$tests,$scenario" ;;
+            esac
+          done <<< "$available"
+          node tools/play-check.js "$tests" --gl=swiftshader --offline
 
       - name: 실패한 실행의 화면 보관
         if: failure() && steps.play.outcome == 'failure'
