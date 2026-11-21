@@ -844,6 +844,14 @@
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    if (mat.vertexColors) {   // 눈길이 비 오는 숲 안으로 들어가면 젖은 흙길 색으로 (가장자리 8 m는 천천히 바뀌어요)
+      const col = [];
+      for (let i = 0; i < pos.length; i += 3) {
+        const f = clamp((52 - Math.hypot(pos[i] + D, pos[i + 2])) / 8, 0, 1);
+        col.push(1 - f * 0.94, 1 - f * 0.945, 1 - f * 0.95);   // 젖은 흙은 아주 어두워요 (숲 바닥 셰이더와 밝기를 맞춤)
+      }
+      geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    }
     geo.setIndex(idx);
     geo.computeVertexNormals();
     walkables.push(addMesh(geo, mat, 0, y, 0));
@@ -998,6 +1006,7 @@
     (zn.gates || (zn.gate ? [zn.gate] : [])).forEach(function (gt) { clearings.push({ x: gt.x, z: gt.z, r: 3.4 }); });
     if (zn.gates) clearings.push({ x: zn.x, z: zn.z, r: zn.r + 1 });   // 모퉁이 쉼터 안에는 숲 나무가 들어오지 않게
   });
+  MAT.path.vertexColors = true;   // 비 오는 숲 안의 길만 어둡게 (ribbon 참고)
   const trailLines = TRAILS.map(function (tr) { return ribbon(tr.pts, 3.2, MAT.path, 0.04, 2.7); });
   console.log("[🛤️ trail] 구불구불한 길", trailLines.length, "개 -> 광장에서 5갈래 + 구역끼리 잇는 둘레길 8개");
   ribbon(STREAM, 5, lambert(0x9fb0d6), 0.03, 0);   // 개울가
