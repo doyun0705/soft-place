@@ -1762,7 +1762,7 @@
             float f = n2(vec2(vB.x * 2.2, vB.y * 0.18)) * 0.55 + n2(vec2(vB.x * 7.0, vB.y * 0.6)) * 0.3 + n2(vec2(vB.x * 20.0, vB.y * 2.0)) * 0.15;
             float ridge = smoothstep(0.38, 0.62, f);                                             // 세로로 깊게 갈라진 나무껍질
             vec3 bark = mix(vec3(0.035, 0.022, 0.017), vec3(0.15, 0.092, 0.065), ridge);
-            float moss = smoothstep(5.0, 0.5, vW.y) * smoothstep(0.45, 0.7, n2(vB * vec2(1.5, 0.5) + 9.0));
+            float moss = (1.0 - smoothstep(0.5, 5.0, vW.y)) * smoothstep(0.45, 0.7, n2(vB * vec2(1.5, 0.5) + 9.0));
             moss = max(moss, smoothstep(0.3, 0.9, N.z * 0.5 + 0.5) * smoothstep(0.55, 0.8, n2(vB * vec2(0.8, 0.12) + 4.0)) * 0.7);   // 밑동과 한쪽 면의 이끼
             bark = mix(bark, vec3(0.045, 0.07, 0.03), moss);
             vec3 L = uLamp - vW; float ld = length(L); L /= ld;
@@ -1882,8 +1882,8 @@
           float a = clamp((uPhase - 0.45) / 0.55, 0.0, 1.0);
           crest = mix(18.0, 2.6, a * a * (3.0 - 2.0 * a)) + (n2(vec2(vW.x * 0.05, 3.0)) - 0.5) * 1.6 * smoothstep(2.6, 8.0, mix(18.0, 2.6, a));   // 물가와 나란하지 않게 살짝 구불구불. 물가 2.6m 앞에서 부서지고 물가 띠가 이어받아요
           coming = step(0.45, uPhase);
-          breakAmt = smoothstep(8.0, 3.0, crest) * coming;          // 얕아지면 하얗게 부서져요
-          float hgt = 0.5 * smoothstep(18.0, 8.0, crest) * coming * (1.0 - 0.6 * breakAmt) * uDetail, dz = zz - crest;
+          breakAmt = (1.0 - smoothstep(3.0, 8.0, crest)) * coming;          // 얕아지면 하얗게 부서져요
+          float hgt = 0.5 * (1.0 - smoothstep(8.0, 18.0, crest)) * coming * (1.0 - 0.6 * breakAmt) * uDetail, dz = zz - crest;
           sl.y += -2.0 * dz / 4.0 * hgt * exp(-dz * dz / 4.0);
         }
         vec3 N = normalize(vec3(-sl.x, 1.0, -sl.y));
@@ -1903,7 +1903,7 @@
           float trail = exp(-max(zz - crest, 0.0) / 2.5) * step(crest, zz);
           float rest = (1.0 - smoothstep(0.0, 0.5, uPhase)) * exp(-zz / 3.5) * lace * 0.7;   // 부서지고 남은 거품
           float foam = clamp((lip * 0.9 + trail * 0.6 * lace) * breakAmt + rest, 0.0, 1.0) * uDetail;
-          float rise = exp(-pow((zz - crest - 0.6) / 1.2, 2.0)) * smoothstep(18.0, 9.0, crest) * (1.0 - breakAmt) * coming;   // 솟는 물마루 너머로 달빛이 살짝 비쳐요
+          float rise = exp(-pow((zz - crest - 0.6) / 1.2, 2.0)) * (1.0 - smoothstep(9.0, 18.0, crest)) * (1.0 - breakAmt) * coming;   // 솟는 물마루 너머로 달빛이 살짝 비쳐요
           col += vec3(0.03, 0.06, 0.07) * rise * uDetail;
           col = mix(col, foamColor(), foam * 0.85);
           g *= 1.0 - foam;
@@ -1921,8 +1921,8 @@
         float ph = uPhase;
         float reach = ph < 0.2 ? -2.6 + (run + 2.6) * (1.0 - pow(1.0 - ph / 0.2, 2.0)) : run * (1.0 - smoothstep(0.2, 0.75, ph));   // 부서진 자리(바다 쪽 2.6m)에서 출발
         float edge = reach + (n2(vec2(vW.x * 0.7, 2.0 + ph * 2.0)) - 0.5) * 0.45;
-        float water = max(smoothstep(edge + 0.05, edge - 0.3, up), smoothstep(0.35, -0.35, up));   // 물이 얇게 덮은 곳 (바다 쪽은 늘 물)
-        float wet = smoothstep(run + 0.7, run - 0.3, up);              // 젖은 모래: 반들반들
+        float water = max((1.0 - smoothstep(edge - 0.3, edge + 0.05, up)), (1.0 - smoothstep(-0.35, 0.35, up)));   // 물이 얇게 덮은 곳 (바다 쪽은 늘 물)
+        float wet = (1.0 - smoothstep(run - 0.3, run + 0.7, up));              // 젖은 모래: 반들반들
         vec3 V = normalize(cameraPosition - vW);
         float nv = max(V.y, 0.001), F = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
         vec3 nW = normalize(vec3((n2(vW.xz * 3.0) - 0.5) * 0.06, 1.0, (n2(vW.xz * 3.0 + 5.0) - 0.5) * 0.06));
@@ -1933,7 +1933,7 @@
         float front = exp(-pow((up - edge) / 0.32, 2.0)) * frontA;
         float foam = clamp(front * (0.45 + 0.55 * lace) + water * lace * 0.3 * (1.0 - smoothstep(0.0, 0.45, ph)), 0.0, 1.0);
         float snowLine = run + 0.6 + (n2(vec2(vW.x * 0.3, 9.0)) - 0.5) * 0.9;   // 여기까지 파도에 눈이 씻겨 나갔어요 (들쭉날쭉)
-        float sand = smoothstep(snowLine + 0.12, snowLine - 0.12, up);
+        float sand = (1.0 - smoothstep(snowLine - 0.12, snowLine + 0.12, up));
         float grain = n2(vW.xz * 14.0) * 0.6 + n2(vW.xz * 3.0) * 0.4;
         vec3 col = vec3(0.15, 0.142, 0.135) * (0.75 + 0.5 * grain);      // 달빛 받은 밤의 모래
         col = mix(col, col * 0.62 + film * 0.55, wet);                   // 젖을수록 어둡고 하늘이 비쳐요
@@ -2303,8 +2303,8 @@
           vec3 refl = mix(uBg, uZenith, smoothstep(0.0, 0.55, R.y));                       // 하늘
           float el = asin(R.y), az = atan(R.x, -R.z) / 6.2832 + 0.5;
           vec4 sk = texture2D(uSky, vec2(az, 0.5));
-          refl = mix(refl, mix(uBg * 1.4, vec3(0.30, 0.34, 0.44) * (0.35 + 0.65 * sk.b) * (0.4 + 0.6 * uMoon), 0.55), smoothstep(0.012, -0.012, el - sk.r * 0.6));   // 먼 설산
-          refl = mix(refl, mix(vec3(0.010, 0.015, 0.020), uBg, 0.5), smoothstep(0.015, -0.015, el - sk.g * 0.6));   // 둘레 숲 (안개에 묻혀 하늘색에 가까워요)
+          refl = mix(refl, mix(uBg * 1.4, vec3(0.30, 0.34, 0.44) * (0.35 + 0.65 * sk.b) * (0.4 + 0.6 * uMoon), 0.55), (1.0 - smoothstep(-0.012, 0.012, el - sk.r * 0.6)));   // 먼 설산
+          refl = mix(refl, mix(vec3(0.010, 0.015, 0.020), uBg, 0.5), (1.0 - smoothstep(-0.015, 0.015, el - sk.g * 0.6)));   // 둘레 숲 (안개에 묻혀 하늘색에 가까워요)
           vec2 D2 = R.xz; float a = dot(D2, D2), b = 2.0 * dot(p, D2), c = dot(p, p) - uRim * uRim;   // 물가 바위(원기둥)에 닿는 높이
           float t = (-b + sqrt(max(b * b - 4.0 * a * c, 0.0))) / (2.0 * a + 1e-5), hitY = t * R.y;
           vec2 hp = p + D2 * t; float ang = atan(hp.y, hp.x);
@@ -2313,7 +2313,7 @@
           float rd = length(rimW - uLamp);
           vec3 rock = vec3(0.022, 0.024, 0.03) + uLampCol * 0.25 / (1.0 + rd * rd * 0.8);
           rock = mix(rock, vec3(0.30, 0.33, 0.42) * (0.4 + 0.6 * uMoon), smoothstep(rimTop - 0.12, rimTop - 0.02, hitY) * 0.7);   // 바위 위 눈
-          refl = mix(refl, rock, smoothstep(0.03, -0.03, hitY - rimTop));
+          refl = mix(refl, rock, (1.0 - smoothstep(-0.03, 0.03, hitY - rimTop)));
           float lampD = length(vW - uLamp);
           vec3 body = vec3(0.02, 0.05, 0.052) * (0.7 + 0.3 * uMoon) + uLampCol * 0.05 / (1.0 + lampD * lampD * 0.15);   // 물속: 깊고 살짝 뿌연 초록빛
           body *= 1.0 - 0.35 * smoothstep(uRim - 0.9, uRim, rr);
@@ -2771,7 +2771,7 @@
           float along = 0.4 + 0.6 * exp(-l * l / 2.2);
           float lum = disk * along * (0.3 + 1.15 * clouds * clouds) * (0.65 + 0.7 * fine) + bulge * (0.55 + 0.9 * clouds);
           float lane = exp(-pow((bb - 0.014 * sin(l * 4.0)) / 0.03, 2.0)) * smoothstep(0.38, 0.62, fbm3(d * 8.0 + 11.0));
-          lum *= 1.0 - 0.82 * lane * smoothstep(1.8, 0.2, abs(l));                   // 가운데를 가르는 검은 먼지 띠
+          lum *= 1.0 - 0.82 * lane * (1.0 - smoothstep(0.2, 1.8, abs(l)));                   // 가운데를 가르는 검은 먼지 띠
           lum *= 1.0 - 0.5 * smoothstep(0.52, 0.78, fbm3(d * 13.0 + 5.0)) * disk;      // 군데군데 먼지 구름
           vec3 col = mix(vec3(0.6, 0.72, 1.0), vec3(1.0, 0.84, 0.64), exp(-l * l / 0.6)) * lum;   // 가운데는 따뜻한 빛, 끝은 푸른빛
           col += vec3(0.5, 0.1, 0.22) * pow(max(fine - 0.56, 0.0) * 2.4, 2.0) * disk;            // 분홍빛 성운 조각
@@ -2954,7 +2954,7 @@
             vec3 green = mix(vec3(0.55, 1.0, 0.45), vec3(0.15, 0.95, 0.55), smoothstep(0.0, 0.05, h));
             col += mix(green, vec3(0.5, 0.25, 0.72), smoothstep(0.1, 0.42, h)) * I;
           }
-          col *= smoothstep(1.7, 0.8, abs(az)) * smoothstep(0.0, 0.12, el) * 0.6 * uVista;   // 양 끝과 지평선 가까이는 흐려요
+          col *= (1.0 - smoothstep(0.8, 1.7, abs(az))) * smoothstep(0.0, 0.12, el) * 0.6 * uVista;   // 양 끝과 지평선 가까이는 흐려요
           gl_FragColor = vec4(col, 1.0);
         }`, { transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide }, aurora));
     m.renderOrder = -2; m.frustumCulled = false;
@@ -4942,7 +4942,7 @@
     void main() {
       float r = length(gl_PointCoord - 0.5);
       if (r > 0.5) discard;
-      gl_FragColor = vec4(vC, smoothstep(0.5, 0.12, r) * vA);
+      gl_FragColor = vec4(vC, (1.0 - smoothstep(0.12, 0.5, r)) * vA);
     }`;
   function particlePool(n, additive) {
     const geo = new THREE.BufferGeometry();
