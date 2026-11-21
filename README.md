@@ -42,6 +42,7 @@
 - `database.rules.json`: 같이 있기용 Firebase 데이터베이스 규칙
 - `textures/`: 사진 텍스처. 없으면 그림 텍스처로 대신 그려요.
 - `AGENTS.md`: AI 작업자용 인수인계 문서 (코드 지도, 규칙, 정해진 것, 지금 상태)
+- `PLAN.md`: AI 작업자 둘(Claude, Codex)의 협업 계획
 - 3D는 three.js r128 (cdnjs)을 써요.
 
 ## 고마운 곳
