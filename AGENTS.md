@@ -17,14 +17,14 @@
 | 곳 | 위치 | 비고 |
 |---|---|---|
 | 원본 | https://github.com/doyun0705/soft-place (Public) | 여기가 기준이에요 |
-| 브랜치 | `main` ← `together` (PR #1) ← `camp-real` (PR #2) | **최신은 `camp-real`**. `main`은 아직 맨 처음 버전. 기준 브랜치 찾는 법: `origin/main`에 `AGENTS.md`가 있으면 `main`, 없으면 `camp-real` |
+| 브랜치 | `main` | **기준은 `main`이에요.** 2026-11-22에 PR #1(`together`)과 PR #2(`camp-real`)를 합쳤어요. 두 옛 브랜치는 남아 있지만 더 쓰지 않아요 |
 | 이전 작업자(Claude Code)의 작업 폴더 | `/home/claude/soft-place/` (원본), `/home/claude/soft-place-artifact/index.html` (미리보기용 사본), `/mnt/project-files/soft-place/` (보관 사본, 미리보기 그림) | 그 클라우드 세션 안에서만 보이는 경로라 다른 작업자는 못 열어요. 내용은 전부 이 저장소에 올라와 있어요 |
 | 도윤 PC | `%USERPROFILE%\soft-place` | 아래 명령으로 받았을 때 |
 
 도윤 PC에 받기 (Win+R → `cmd` → 붙여넣기 → 엔터. git이 깔려 있어야 해요):
 
 ```
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$d = Join-Path $env:USERPROFILE 'soft-place'; Write-Host ('[1/3] folder: ' + $d); if (Test-Path (Join-Path $d '.git')) { Write-Host '[2/3] already here, updating'; git -C $d fetch origin; git -C $d checkout camp-real; git -C $d pull origin camp-real } else { Write-Host '[2/3] downloading'; git clone -b camp-real https://github.com/doyun0705/soft-place.git $d }; Write-Host ('[3/3] done. handover doc exists=' + (Test-Path (Join-Path $d 'AGENTS.md')) + ' : ' + (Join-Path $d 'AGENTS.md'))"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$d = Join-Path $env:USERPROFILE 'soft-place'; Write-Host ('[1/3] folder: ' + $d); if (Test-Path (Join-Path $d '.git')) { Write-Host '[2/3] already here, updating'; git -C $d fetch origin; git -C $d checkout main; git -C $d pull origin main } else { Write-Host '[2/3] downloading'; git clone https://github.com/doyun0705/soft-place.git $d }; Write-Host ('[3/3] done. handover doc exists=' + (Test-Path (Join-Path $d 'AGENTS.md')) + ' : ' + (Join-Path $d 'AGENTS.md'))"
 ```
 
 ## 3. 파일
@@ -110,11 +110,10 @@ AI 작업자가 판단해서 정한 것 (도윤이 아직 답하지 않음):
 
 ## 8. 지금 상태 (2026-11-22)
 
-- PR #1 `together` → `main`: 열려 있음 (같이 있기 기본).
-- PR #2 `camp-real` → `together`: 열려 있음 (캠핑장 실감판, 소리, 조작, 공중샷, 방). #1을 먼저 합쳐야 해요.
+- PR #1(같이 있기)과 PR #2(캠핑장 실감판, 소리, 조작, 공중샷, 방)는 2026-11-22에 `main`으로 합쳤어요. 지금 열려 있는 PR은 저장소에서 확인하세요.
 - GitHub Pages: 꺼져 있음. 아직 공개 주소 없음.
 - `FIREBASE_DB_URL`: 비어 있음. 그래서 "같이 있기"는 같은 브라우저 탭끼리만 돼요.
-- 기다리는 것: 도윤의 캐릭터 그림, Firebase Realtime Database 주소, PR 합치라는 말, Pages 공개.
+- 기다리는 것: 도윤의 캐릭터 그림, Firebase Realtime Database 주소, Pages 공개. 자세한 건 `PLAN.md` 4번.
 
 ## 9. 확인 못 한 것과 알려진 문제
 
@@ -164,4 +163,4 @@ const { chromium } = require('playwright');
 
 - 2026-11-16 ~ 17: 첫 버전(공간 9곳, 꾸미기, 앉기, 소리). 같이 있기(PR #1). 캠핑장 실감판 시작(PR #2): 솜뭉치 눈사람, 표지판, 은하수와 유성우, 절벽 전망, 전나무, 텐트, 사진 텍스처, 마시멜로, 원소, 뽀송한 눈과 발자국.
 - 2026-11-18: 기침 소리 크게, '후~' 소리, 자연스러운 모닥불 소리, 원소 넣을 때 불 커짐, 마우스 클릭 이동 빼기, HUD가 마우스를 가로막던 버그 수정, 앉아서 고개 돌리기, 공중샷, 혼자/방 고르기와 방 기능.
-- 2026-11-22: 이 인수인계 문서와 협업 계획(`PLAN.md`) 추가. Codex가 두 번째 작업자로 들어옴.
+- 2026-11-22: 이 인수인계 문서와 협업 계획(`PLAN.md`) 추가. Codex가 두 번째 작업자로 들어옴. PR #1, #2를 `main`에 합침.
