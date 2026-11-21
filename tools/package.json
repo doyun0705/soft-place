@@ -1,0 +1,8 @@
+{
+  "name": "soft-place-play-check",
+  "private": true,
+  "devDependencies": {
+    "playwright": "1.65.1",
+    "three": "0.128.0"
+  }
+}
