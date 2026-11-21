@@ -36,6 +36,7 @@ const VIEW_SEAT = { x: 3, z: -96, yaw: 0 };      // 캠핑장 절벽 전망 자�
 const PLAZA = { x: -4, z: 6, yaw: 0.6 };         // 중앙 광장 (눈이라 발자국이 남아요)
 const BEACH_BENCH = { x: 4, z: 81.8, yaw: 0 };   // 파도 해변 벤치 앞 (E 누르면 바다를 보고 앉아요)
 const SPRING_EDGE = { x: -65.9, z: 72, yaw: 0 };   // 눈꽃 온천 남쪽 물가 (E 누르면 몸을 담가요)
+const CHIMES_BENCH = { x: 70.4, z: 69.3, yaw: 0 };   // 풍경 나무 동남쪽 벤치 앞 (E 누르면 느티나무와 북쪽 하늘을 보고 앉아요)
 const RAIN_BENCH = { x: -80, z: 0.3, yaw: 0 };   // 비 오는 숲 정자 안 벤치 앞 (E 누르면 남쪽을 보고 앉아요)
 
 // ---------- 작은 웹 서버: 저장소 폴더를 그대로 보여 줘요 ----------
@@ -376,6 +377,31 @@ const tests = {
       check(t, true, '비 오는 숲에서는 달이 안 보임');
       await shot(t, p, 'rain');
       await ctx.close();
+    },
+  },
+
+  chimes: {
+    what: '풍경 나무 벤치: 1인칭으로 앉으면 느티나무 가지 너머 북쪽 하늘에 오로라가 보이고, 다른 공간에서는 오로라를 그리지 않아요',
+    run: async t => {
+      const ctx = await newContext();
+      const p = await open(ctx, t, CHIMES_BENCH);
+      await sit(p, 'sit');
+      await until(p, () => window.__soft.cam.pos.y > 1.2 && window.__soft.cam.pos.y < 1.9, null, '눈높이로 카메라 옮기기');
+      const s = await p.evaluate(() => ({ watching: document.body.classList.contains('watching'), zone: window.__soft.state.zone }));
+      check(t, s.watching && s.zone === 'chimes', '풍경 나무 벤치는 1인칭', s);
+      await until(p, () => window.__soft.aurora.group.visible && window.__soft.aurora.mats[0].uniforms.uVista.value > 0.8, null, '오로라가 나타나기');
+      const t0 = await p.evaluate(() => window.__soft.aurora.mats[0].uniforms.uTime.value);
+      await frames(p, 4);
+      const t1 = await p.evaluate(() => window.__soft.aurora.mats[0].uniforms.uTime.value);
+      check(t, t1 !== t0, '오로라가 천천히 움직임');
+      await shot(t, p, 'chimes');
+      await ctx.close();
+      const ctx2 = await newContext();
+      const q = await open(ctx2, t, BEACH_BENCH);
+      await frames(q, 30);
+      const far = await q.evaluate(() => window.__soft.aurora.group.visible);
+      check(t, !far, '해변에서는 오로라를 그리지 않음', { visible: far });
+      await ctx2.close();
     },
   },
 

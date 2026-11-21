@@ -465,7 +465,7 @@
     voice: { sky: 0x1b1836, near: 24, far: 76, stars: 0.9 },
     library: { sky: 0x1a1730, near: 22, far: 72, stars: 0.8 },
     spring: { sky: 0x16223f, near: 18, far: 66, stars: 0.7, peaks: 1 },   // 김이 올라서 조금 뿌옇게. 둘레에 높은 설산(peaks)
-    chimes: { sky: 0x1d1a44, near: 26, far: 80, stars: 1 },
+    chimes: { sky: 0x161a3c, near: 26, far: 80, stars: 1, glow: 0x0a2a24, aurora: 1 },   // 북쪽 하늘에 오로라(aurora). 북쪽 지평선이 초록빛으로 조금 밝아요
     read: { sky: 0x0d0a10, near: 5, far: 24, stars: 0.2 },     // 책 읽는 중: 등불 둘레만 남아요
     fire: { sky: 0x08070d, near: 3.5, far: 15, stars: 0.3 }   // 불멍 중: 주변이 어둠 속으로 사라지고 불만 남아요
   };
@@ -1398,6 +1398,7 @@
   scene.add(peaks.group);
   const grove = { group: new THREE.Group(), mats: [] };   // 비 오는 숲 큰 나무 줄기 (정자 가까이 있을 때만, rain.cover)
   scene.add(grove.group);
+  const aurora = { group: new THREE.Group(), mats: [] };   // 풍경 나무 북쪽 하늘 오로라 (풍경 나무에 있을 때만, ambient.aurora). 하늘 묶음(sky.group)에 붙어요
   const VISTA_NOISE = `
     float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float n2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), f.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), f.x), f.y); }`;
@@ -1591,7 +1592,7 @@
       if (m.uniforms.uMoonDir) m.uniforms.uMoonDir.value.copy(sky.moonDir);
     }
   }
-  function updateVista() { fadeVista(vista, ambient.vista); fadeVista(peaks, ambient.peaks); fadeVista(grove, rain.cover); }
+  function updateVista() { fadeVista(vista, ambient.vista); fadeVista(peaks, ambient.peaks); fadeVista(grove, rain.cover); fadeVista(aurora, ambient.aurora); }
 
   // ---- ⌨️ 딸깍 정원 ----
   const keycaps = [];
@@ -2566,14 +2567,101 @@
   (function buildChimes() {
     const Z = ZONES[8], cx = Z.x, cz = Z.z, HOOP = 5.0;
     zoneGround(Z.r, 0xc3b8d4, cx, cz, 7.9);
-    addMesh(new THREE.CylinderGeometry(0.42, 0.72, 5.3, 9), MAT.trunk, cx, 2.65, cz);
-    for (let i = 0; i < 5; i++) {   // 위로 뻗은 가지 + 가지 끝 눈
-      const a = i / 5 * Math.PI * 2 + 0.4;
-      addMesh(new THREE.CylinderGeometry(0.06, 0.16, 2.6, 6), MAT.trunk, cx + Math.cos(a) * 0.9, 6.1, cz + Math.sin(a) * 0.9).rotation.set(Math.sin(a) * 0.75, 0, -Math.cos(a) * 0.75);
-      addMesh(new THREE.SphereGeometry(0.34, 8, 6), MAT.snow, cx + Math.cos(a) * 1.75, 7.15, cz + Math.sin(a) * 1.75).scale.y = 0.6;
+    // 겨울 느티나무: 굵은 줄기가 3 m쯤에서 큰 가지 5개로 갈라져 꽃병처럼 퍼지고, 끝으로 갈수록 잔가지가 많아요. 가지 위엔 눈이 얹혀요
+    // 씨앗을 따로 써서(mulberry32) 다른 곳 나무 배치는 그대로예요. 고리는 큰 가지에서 내려온 줄 5개에 매달려요
+    function buildOldTree(hoopY) {
+      const tr = mulberry32(8181), pos = [], nrm = [], bb = [], idx = [], limbs = [];
+      function tube(path, r0, r1, seg, close, along0, flare) {   // 가운데 선(path)을 따라 굵기 r0 -> r1인 관. 단면 방향을 이어서 옮겨서 꼬이지 않아요
+        const base = pos.length / 3, n = path.length;
+        let a = null, along = along0;
+        for (let j = 0; j < n; j++) {
+          const p = path[j], tg = path[Math.min(n - 1, j + 1)].clone().sub(path[Math.max(0, j - 1)]).normalize();
+          if (!a) a = new THREE.Vector3().crossVectors(tg, Math.abs(tg.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0));
+          a.addScaledVector(tg, -a.dot(tg)).normalize();
+          const b = new THREE.Vector3().crossVectors(tg, a);
+          if (j > 0) along += p.distanceTo(path[j - 1]);
+          const r = (j === n - 1 && close ? r1 * 0.3 : r0 + (r1 - r0) * j / (n - 1)) * (flare ? 1 + 0.6 * Math.exp(-Math.max(p.y, 0) / 0.6) : 1);   // 끝은 오므려서 속이 안 보이게 (갈라지는 곳은 다음 가지가 덮어요)
+          for (let i = 0; i <= seg; i++) {
+            const th = i / seg * Math.PI * 2, c = Math.cos(th), s = Math.sin(th);
+            const nx = a.x * c + b.x * s, ny = a.y * c + b.y * s, nz = a.z * c + b.z * s;
+            pos.push(p.x + nx * r, p.y + ny * r, p.z + nz * r); nrm.push(nx, ny, nz); bb.push(th * Math.max(r, 0.06) * 2.0, along);
+          }
+        }
+        for (let j = 0; j < n - 1; j++) for (let i = 0; i < seg; i++) {
+          const a0 = base + j * (seg + 1) + i, b0 = a0 + seg + 1;
+          idx.push(a0, a0 + 1, b0, a0 + 1, b0 + 1, b0);   // 바깥을 향하는 면 (단면을 도는 방향에 맞춘 순서)
+        }
+      }
+      function grow(p0, dir, len, r0, depth, a0) {
+        const n = Math.max(3, Math.round(len / 0.55)), path = [p0.clone()], d = dir.clone(), p = p0.clone();
+        for (let j = 1; j <= n; j++) {   // 조금씩 구불구불, 끝은 살짝 위로
+          d.x += (tr() - 0.5) * 0.22; d.z += (tr() - 0.5) * 0.22; d.y += (tr() - 0.5) * 0.12 + 0.025 * depth;
+          d.normalize(); p.addScaledVector(d, len / n); path.push(p.clone());
+        }
+        const r1 = r0 * (depth === 0 ? 0.68 : 0.55);
+        if (depth === 0) path.push(p.clone().addScaledVector(d, 0.45));   // 줄기 끝은 큰 가지들 속에 숨겨서 오므려요
+        tube(path, depth === 0 ? r0 * 1.25 : r0, r1, depth < 2 ? 12 : depth < 3 ? 7 : 5, true, a0, depth === 0);   // 줄기 밑동은 뿌리 쪽으로 퍼져요
+        if (depth === 1) limbs.push(path);
+        if (depth >= 4) return;
+        const kids = depth === 0 ? 5 : 2 + (tr() < 0.55 ? 1 : 0);
+        for (let k = 0; k < kids; k++) {
+          let nd;
+          if (depth === 0) {   // 큰 가지 5개: 사방으로 43도쯤 기울어 퍼져요
+            const az = k / 5 * Math.PI * 2 + 0.4 + (tr() - 0.5) * 0.3, tilt = 0.68 + tr() * 0.16;
+            nd = new THREE.Vector3(Math.sin(tilt) * Math.cos(az), Math.cos(tilt), Math.sin(tilt) * Math.sin(az));
+          } else {
+            const sp = 0.45 + tr() * 0.35, az = tr() * Math.PI * 2;
+            nd = d.clone().add(new THREE.Vector3(Math.cos(az) * sp, (tr() - 0.3) * sp, Math.sin(az) * sp)).normalize();
+          }
+          const at = depth === 0 ? path[n - 1].clone().lerp(path[n], 0.4) : k === 0 ? path[n - 1].clone().lerp(path[n], 0.6) : path[Math.max(1, n - 1 - Math.floor(tr() * (n - 1)))];   // 끝에서, 또는 중간에서 곁가지
+          grow(at, nd, len * (depth === 0 ? 1.3 : 0.62 + tr() * 0.12), r1 * (depth === 0 ? 0.88 : 0.92), depth + 1, a0 + len);   // 껍질 무늬가 갈라지는 곳에서 이어지게
+        }
+      }
+      grow(new THREE.Vector3(cx, -0.3, cz), new THREE.Vector3(0, 1, 0), 3.5, 0.62, 0, 0);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
+      g.setAttribute("aB", new THREE.Float32BufferAttribute(bb, 2));
+      g.setIndex(idx);
+      chimes.treeMat = new THREE.ShaderMaterial({
+        uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uMoonDir: { value: moonLight.position.clone().normalize() }, uLight: { value: 1 }, uAur: { value: 0 } }]),
+        fog: true,
+        vertexShader: "#include <fog_pars_vertex>\nattribute vec2 aB; varying vec3 vW; varying vec3 vN; varying vec2 vB;\nvoid main() { vB = aB; vN = normal; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}",
+        fragmentShader: "#include <fog_pars_fragment>\n" + VISTA_NOISE + `
+          uniform vec3 uMoonDir; uniform float uLight, uAur; varying vec3 vW; varying vec3 vN; varying vec2 vB;
+          void main() {
+            vec3 N = normalize(vN);
+            float f = n2(vec2(vB.x * 6.0, vB.y * 2.0)) * 0.5 + n2(vec2(vB.x * 18.0, vB.y * 6.0)) * 0.3 + n2(vec2(vB.x * 50.0, vB.y * 14.0)) * 0.2;   // 느티나무 껍질: 얇은 비늘 무늬
+            vec3 bark = mix(vec3(0.11, 0.1, 0.095), vec3(0.3, 0.28, 0.26), smoothstep(0.3, 0.75, f));
+            bark = mix(bark, vec3(0.36, 0.29, 0.22), smoothstep(0.64, 0.72, n2(vB * vec2(5.0, 2.5) + 5.0)) * 0.7);   // 비늘이 벗겨진 주황빛 자리
+            bark *= 0.7 + 0.3 * n2(vB * vec2(1.0, 0.25) + 2.0);
+            float snow = smoothstep(0.62, 0.72, N.y + (n2(vB * vec2(3.0, 2.2)) - 0.5) * 0.5) * smoothstep(2.0, 3.0, vW.y);   // 가지 맨 위에만 얇게 얹힌 눈 (군데군데 끊겨요)
+            vec3 alb = mix(bark, vec3(0.8, 0.85, 0.95), snow);
+            vec3 amb = mix(vec3(0.165, 0.141, 0.251), vec3(0.557, 0.624, 0.902), N.y * 0.5 + 0.5) * 0.5;   // 하늘빛(hemiLight)과 같은 색·세기
+            vec3 col = alb * (amb + vec3(0.78, 0.83, 1.0) * max(dot(N, uMoonDir), 0.0) * 0.42) * uLight;   // 달빛(moonLight)과 같은 세기
+            col += alb * vec3(0.08, 0.5, 0.3) * uAur * max(-N.z, 0.0) * 0.35;   // 북쪽(오로라) 쪽 면이 초록빛을 조금 받아요
+            gl_FragColor = vec4(col, 1.0);
+            #include <encodings_fragment>
+            #include <fog_fragment>
+          }`
+      });
+      scene.add(new THREE.Mesh(g, chimes.treeMat));
+      // 고리를 거는 줄: 큰 가지마다 고리 바로 위(둘레 3 m)에 가장 가까운 곳에서 내려와요
+      const rope = [];
+      limbs.forEach(function (path) {
+        let best = null, bd = 0.8;
+        path.forEach(function (q) { const e = Math.abs(Math.hypot(q.x - cx, q.z - cz) - 3.0); if (q.y > hoopY + 0.5 && e < bd) { bd = e; best = q; } });
+        if (!best) return;
+        const az = Math.atan2(best.z - cz, best.x - cx);
+        rope.push(best.x, best.y - 0.05, best.z, cx + Math.cos(az) * 3.0, hoopY, cz + Math.sin(az) * 3.0);
+      });
+      const rg = new THREE.BufferGeometry();
+      rg.setAttribute("position", new THREE.Float32BufferAttribute(rope, 3));
+      scene.add(new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0x2b2430 })));
+      console.log("[🌳 chimes] 느티나무 -> 점", pos.length / 3, "| 고리 줄", rope.length / 6, "개");
     }
+    buildOldTree(HOOP);
     addMesh(new THREE.TorusGeometry(3.0, 0.06, 6, 40), MAT.darkWood, cx, HOOP, cz).rotation.x = Math.PI / 2;   // 풍경을 거는 둥근 고리
-    for (let i = 0; i < 4; i++) addMesh(new THREE.BoxGeometry(6.0, 0.07, 0.07), MAT.darkWood, cx, HOOP, cz).rotation.y = i / 4 * Math.PI;
     const NOTES = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.51];   // 도레미솔라 5음 음계: 아무렇게나 울려도 어울려요
     const tagColors = [0xffc2d4, 0xfff0b8, 0xc2f0d8, 0xc2dcff, 0xe0c8ff, 0xffd6b0, 0xd0f4f4, 0xffe0ec];
     const metal = new THREE.MeshPhongMaterial({ color: 0xd8def5, emissive: 0x2c3046, specular: 0xffffff, shininess: 90 });
@@ -2585,7 +2673,7 @@
       addMesh(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 4), MAT.dark, 0, -0.25, 0, g);            // 줄
       addMesh(new THREE.CylinderGeometry(0.075, 0.075, len, 10), metal, 0, -0.5 - len / 2, 0, g);     // 울리는 관
       addMesh(new THREE.CylinderGeometry(0.006, 0.006, 0.3, 4), MAT.dark, 0, -0.65 - len, 0, g);
-      addMesh(new THREE.PlaneGeometry(0.24, 0.5), new THREE.MeshBasicMaterial({ color: tagColors[i], side: THREE.DoubleSide }), 0, -1.05 - len, 0, g).rotation.y = a;   // 종이 꼬리
+      addMesh(new THREE.PlaneGeometry(0.24, 0.5), new THREE.MeshLambertMaterial({ color: tagColors[i], emissive: tagColors[i], emissiveIntensity: 0.3, side: THREE.DoubleSide }), 0, -1.05 - len, 0, g).rotation.y = a;   // 종이 꼬리
       const hit = addMesh(new THREE.CylinderGeometry(0.4, 0.4, 2.6, 8), hitMat, 0, -1.4, 0, g);
       const ch = { group: g, x: g.position.x, z: g.position.z, freq: NOTES[i], swing: 0.03, phase: rand() * 6.28, cool: 0, index: i };
       hit.userData.chime = ch;
@@ -2593,8 +2681,9 @@
       scene.add(g);
     }
     colliders.push({ x: cx, z: cz, r: 0.85 });
-    makeBench(cx + 5.6, cz + 4.2, Math.atan2(-5.6, -4.2));
-    makeBench(cx - 1.5, cz + 6.9, Math.atan2(1.5, -6.9));
+    const BENCH_NOTE = { note: "🎐 느티나무 가지 사이로 북쪽 하늘 오로라 · 바람이 풍경을 울려요 · B 숨 흔들림", lookUp: 0.24 };
+    makeBench(cx + 5.6, cz + 4.2, Math.atan2(-5.6, -4.2)); Object.assign(seats[seats.length - 1], BENCH_NOTE);
+    makeBench(cx - 1.5, cz + 6.9, Math.atan2(1.5, -6.9)); Object.assign(seats[seats.length - 1], BENCH_NOTE);
     for (let i = 0; i < 7; i++) {
       const a = -1.0 + i / 6 * 2.1 + (rand() - 0.5) * 0.2, r = Z.r + 2.8 + rand() * 4;
       const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
@@ -2836,6 +2925,42 @@
     sky.group.add(sky.metHeads);
     for (let i = 0; i < MM; i++) sky.list.push({ on: false });
     console.log("[✨ sky] 하늘 돔 + 은하수 + 별", N, "개 + 달 + 별똥별 자리", MM, "개");
+  })();
+
+  // ---- 🌌 오로라: 풍경 나무에 있을 때만 북쪽 하늘에 천천히 흔들리는 빛 커튼 (하늘처럼 내 머리를 따라와요) ----
+  // 아래 끝은 또렷한 초록, 위로 갈수록 흐려지며 보랏빛. 세로 빛줄기와 접힌 자리가 아주 천천히 흘러가요 (깜빡임 없음)
+  (function buildAurora() {
+    const R = SKY_R * 0.9, AZ0 = -0.25;   // AZ0: 가운데 방향 (0 = 정북, 음수 = 서쪽)
+    const geo = new THREE.SphereGeometry(R, 96, 24, Math.PI * 1.5 - AZ0 - 1.75, 3.5, Math.PI / 2 - 1.25, 1.28);
+    const m = new THREE.Mesh(geo, vistaMat({},
+      "varying vec3 vD; void main() { vD = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+      VISTA_NOISE + `
+        uniform float uVista, uTime; varying vec3 vD;
+        void main() {
+          vec3 d = normalize(vD);
+          float az = atan(d.x, -d.z) - (${AZ0.toFixed(2)});   // 0 = 오로라 가운데
+          float el = asin(clamp(d.y, -1.0, 1.0)), t = uTime;
+          vec3 col = vec3(0.0);
+          for (int k = 0; k < 2; k++) {   // 커튼 두 겹 (뒤 겹은 낮고 흐리게)
+            float fk = float(k), s = az * (1.0 + fk * 0.35) + fk * 4.1;
+            float base = 0.4 - 0.08 * fk - 0.1 * az * az + 0.07 * (n2(vec2(s * 1.4 + t * 0.012, fk * 3.0)) - 0.5) + 0.025 * sin(s * 3.3 - t * 0.03 + fk);
+            float h = el - base;
+            float body = smoothstep(-0.012, 0.006, h) * exp(-max(h, 0.0) / (0.16 + 0.05 * fk));   // 아래 끝은 또렷하고 위로 흐려져요
+            float ray = n2(vec2(s * 55.0 + n2(vec2(s * 4.0, t * 0.02)) * 6.0, t * 0.06));        // 세로 빛줄기
+            ray = 0.3 + 0.9 * ray * ray;
+            float fold = 0.5 + 1.0 * pow(n2(vec2(s * 6.0 - t * 0.025, 7.0 + fk)), 3.0);          // 커튼이 접혀 겹친 곳이 더 밝아요
+            float along = 0.35 + 0.9 * n2(vec2(s * 2.2 - t * 0.01, 3.0 + fk * 5.0));
+            float I = body * ray * fold * along * (1.0 - 0.45 * fk);
+            vec3 green = mix(vec3(0.55, 1.0, 0.45), vec3(0.15, 0.95, 0.55), smoothstep(0.0, 0.05, h));
+            col += mix(green, vec3(0.5, 0.25, 0.72), smoothstep(0.1, 0.42, h)) * I;
+          }
+          col *= smoothstep(1.7, 0.8, abs(az)) * smoothstep(0.0, 0.12, el) * 0.6 * uVista;   // 양 끝과 지평선 가까이는 흐려요
+          gl_FragColor = vec4(col, 1.0);
+        }`, { transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide }, aurora));
+    m.renderOrder = -2; m.frustumCulled = false;
+    aurora.group.add(m);
+    sky.group.add(aurora.group);
+    console.log("[🌌 aurora] 풍경 나무 북쪽 오로라 -> 커튼 2겹 (풍경 나무에 있을 때만)");
   })();
 
   // 별똥별 하나 띄우기. 유성우면 한 점(복사점)에서 사방으로 퍼지듯 날아가요
@@ -5028,6 +5153,8 @@
   }
   function updateChimes(dt, t) {
     const p = player.pos, near = Math.hypot(p.x - chimes.x, p.z - chimes.z);
+    chimes.treeMat.uniforms.uAur.value = ambient.aurora;
+    chimes.treeMat.uniforms.uLight.value = dimLevel * ambient.light;
     for (let i = 0; i < chimes.list.length; i++) {
       const ch = chimes.list[i];
       ch.cool = Math.max(0, ch.cool - dt);
@@ -5162,7 +5289,7 @@
   }
 
   // 구역을 옮기면 하늘색·안개·별 밝기가 천천히 바뀌어요 (비 오는 숲은 흐리고 어둡게)
-  const ambient = { color: new THREE.Color(0x141a3a), near: 40, far: 120, air: 0, stars: 1, glow: new THREE.Color(0), vista: 0, peaks: 0, light: 1 };
+  const ambient = { color: new THREE.Color(0x141a3a), near: 40, far: 120, air: 0, stars: 1, glow: new THREE.Color(0), vista: 0, peaks: 0, aurora: 0, light: 1 };
   const tmpColor = new THREE.Color();
   let dimLevel = 1;   // 1 = 평소 밝기, 작을수록 주변이 어두움
   function updateAmbient(dt) {
@@ -5175,6 +5302,7 @@
     ambient.glow.lerp(tmpColor.set(a.glow || 0x0b0e1a), k);
     ambient.vista += ((a.vista || 0) - ambient.vista) * k;
     ambient.peaks += ((a.peaks || 0) - ambient.peaks) * k;
+    ambient.aurora += ((a.aurora || 0) - ambient.aurora) * k;
     ambient.light += ((a.light || 1) - ambient.light) * k;
     scene.background.copy(ambient.color);
     scene.fog.color.copy(ambient.color);
@@ -5317,7 +5445,7 @@
   // 🧪 시험 손잡이: tools/ 시험 대본이 게임 상태를 읽는 곳이에요. 화면과 동작은 바꾸지 않아요.
   window.__soft = {
     state: state, player: player, cam: cam, fire: fire, mallow: mallow, sprinkle: sprinkle, ashes: ashes,
-    net: net, others: others, printBorn: printBorn, LOOK_LIMIT: LOOK_LIMIT, renderer: renderer, scene: scene, breath: breath, seats: seats, spring: spring, peaks: peaks, rain: rain, grove: grove, sky: sky,
+    net: net, others: others, printBorn: printBorn, LOOK_LIMIT: LOOK_LIMIT, renderer: renderer, scene: scene, breath: breath, seats: seats, spring: spring, peaks: peaks, rain: rain, grove: grove, sky: sky, aurora: aurora, chimes: chimes,
     get audio() { return audio; },
     get frame() { return frame; },
     sound: {   // 소리 시험: 소리 엔진을 잠깐 OfflineAudioContext로 바꿔 끼우고 소리 함수를 불러 크기를 재요
