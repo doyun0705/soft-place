@@ -35,6 +35,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "$d = Join-Path $env:USER
 - `README.md`: 사람이 읽는 소개. 기능을 바꾸면 같이 고치세요.
 - `AGENTS.md`: 이 문서 (규칙, 코드 지도, 정해진 것).
 - `PLAN.md`: 협업 계획 (Claude와 Codex의 할 일, 만지는 곳 나누기, 주고받는 방법).
+- `tools/`: 자동 플레이 시험 (`play-check.js`, 쓰는 법은 `tools/README.md`).
 
 ## 4. 실행
 
@@ -66,7 +67,7 @@ npx serve -l 8000
 | 7 | 소리 | `startAudio`, `nb`, `nenv`, `crackle`, `playEat`, `coughAt`, `playBlow`, `playFlare`, `updateAudio` |
 | 8 | 화면(UI) | `openPanel`, `enterWorld`, `toggleAerial`, `toggleZen`, `drawMinimap` |
 | 8.5 | 같이 있기와 방 | `net`, `others`, `onRemote`, `joinRoom`, `joinRandom`, `leaveRoom`, `joinLocalRoom`, `joinFirebaseRoom` |
-| 9 | 매 프레임 업데이트 | `updatePlayer`, `updateFire`, `updateMallow`, `updateSprinkle`, `updatePrints`, `updateAmbient`, `updateCamera`, `loop` |
+| 9 | 매 프레임 업데이트 | `updatePlayer`, `updateFire`, `updateMallow`, `updateSprinkle`, `updatePrints`, `updateAmbient`, `updateCamera`, `loop`, 끝에 시험 손잡이 `window.__soft` |
 | 10 | 시작 | `start(data)` |
 
 공간 9곳: 중앙 광장(0,0), 모닥불 캠핑장(0,-D), 딸깍 정원(D,0), 비 오는 숲(-D,0), 파도 해변(0,D), 수다 마당(V,-V), 눈 속 도서관(-V,-V), 눈꽃 온천(-V,V), 풍경 나무(V,V).
@@ -126,29 +127,18 @@ AI 작업자가 판단해서 정한 것 (도윤이 아직 답하지 않음):
 
 ## 10. 시험 방법
 
-자동 시험 파일은 저장소에 없어요(이전 작업자의 임시 폴더에만 있었어요). 방법은 이래요: Playwright로 페이지를 열고, 시작 데이터로 원하는 자리에 세운 다음, 키를 누르고 화면을 찍어서 눈으로 확인해요.
+자동 시험은 `tools/play-check.js`예요. 쓰는 법과 시험 목록은 `tools/README.md`에 있어요.
 
-```js
-// 먼저: npm i playwright  그리고 다른 창에서 python -m http.server 8000
-const { chromium } = require('playwright');
-(async () => {
-  const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-  const p = await b.newPage({ viewport: { width: 1280, height: 800 } });
-  p.on('pageerror', e => console.log('PAGEERROR', e.message));
-  await p.addInitScript(() => { window.claude = { hot: { data: { mode: 'play', x: 0, z: -86.2, yaw: 0 } } }; });   // 모닥불 앞에서 시작
-  await p.goto('http://localhost:8000/');
-  await p.waitForTimeout(5000);
-  await p.keyboard.press('KeyE');          // 앉기 -> 불멍
-  await p.waitForTimeout(5000);
-  await p.screenshot({ path: 'fire.png' });
-  await b.close();
-})();
+```
+node tools/play-check.js            전부
+node tools/play-check.js fire,rooms 골라서
 ```
 
-- cdnjs가 막힌 곳에서는 `page.route`로 `three.min.js` 요청을 npm `three@0.128.0`의 `build/three.min.js`로 바꿔 주세요.
+- 게임 상태는 `window.__soft`(시험 손잡이, 9번 섹션 끝)로 읽어요. `state`, `player`, `cam`, `fire`, `mallow`, `net`, `others`, `renderer` 등이 있어요. 거기 이름을 바꾸면 시험도 같이 고치세요.
+- 시작 데이터로 원하는 자리에 세워요: `window.claude = { hot: { data: { mode: 'play', x: 0, z: -86.2, yaw: 0 } } }` (모닥불 앞).
 - 소프트웨어 그래픽은 아주 느려요. 정해진 시간만큼 기다리지 말고 `page.waitForFunction`으로 상태가 될 때까지 기다리세요.
-- 방 시험은 **같은 브라우저 컨텍스트**에서 탭을 여러 개 열어야 해요(`browser.newContext()` 하나에서 `newPage()` 여러 번).
-- 소리 시험: 소리 함수를 `OfflineAudioContext`에 그려서 50ms마다 크기(RMS)를 보면 "소리가 나는지, 불 소리에 묻히는지"를 알 수 있어요. 모닥불 우르르 소리의 크기는 RMS 0.06~0.09쯤이에요(어림값).
+- 방 시험은 **같은 브라우저 컨텍스트**에서 탭을 여러 개 열어야 해요.
+- 소리는 귀로 못 들으니 `OfflineAudioContext`에 그려서 크기(RMS)를 재요. 모닥불 우르르 소리는 RMS 0.06~0.09쯤이에요(어림값).
 
 ## 11. 작업자가 둘일 때
 
@@ -164,3 +154,4 @@ const { chromium } = require('playwright');
 - 2026-11-16 ~ 17: 첫 버전(공간 9곳, 꾸미기, 앉기, 소리). 같이 있기(PR #1). 캠핑장 실감판 시작(PR #2): 솜뭉치 눈사람, 표지판, 은하수와 유성우, 절벽 전망, 전나무, 텐트, 사진 텍스처, 마시멜로, 원소, 뽀송한 눈과 발자국.
 - 2026-11-18: 기침 소리 크게, '후~' 소리, 자연스러운 모닥불 소리, 원소 넣을 때 불 커짐, 마우스 클릭 이동 빼기, HUD가 마우스를 가로막던 버그 수정, 앉아서 고개 돌리기, 공중샷, 혼자/방 고르기와 방 기능.
 - 2026-11-22: 이 인수인계 문서와 협업 계획(`PLAN.md`) 추가. Codex가 두 번째 작업자로 들어옴. PR #1, #2를 `main`에 합침.
+- 2026-11-22: 자동 플레이 시험 `tools/play-check.js`(시험 11개)와 시험 손잡이 `window.__soft` 추가 (C2).

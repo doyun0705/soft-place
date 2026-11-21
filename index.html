@@ -4649,6 +4649,19 @@
     requestAnimationFrame(loop);
   }
 
+  // 🧪 시험 손잡이: tools/ 시험 대본이 게임 상태를 읽는 곳이에요. 화면과 동작은 바꾸지 않아요.
+  window.__soft = {
+    state: state, player: player, cam: cam, fire: fire, mallow: mallow, sprinkle: sprinkle, ashes: ashes,
+    net: net, others: others, printBorn: printBorn, LOOK_LIMIT: LOOK_LIMIT, renderer: renderer, scene: scene,
+    get audio() { return audio; },
+    get frame() { return frame; },
+    sound: {   // 소리 시험: 소리 엔진을 잠깐 OfflineAudioContext로 바꿔 끼우고 소리 함수를 불러 크기를 재요
+      use: function (a) { const was = audio; audio = a; return was; },
+      makeNoiseBuffer: makeNoiseBuffer, coughAt: coughAt, playBlow: playBlow, playEat: playEat,
+      playSprinkle: playSprinkle, playFlare: playFlare, crackle: crackle
+    }
+  };
+
   // =====================================================================
   // 10. 시작 (다시 배포돼도 위치를 기억)
   // =====================================================================
