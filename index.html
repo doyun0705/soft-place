@@ -760,6 +760,7 @@
   }
 
   // 구역 입구 문: 기둥 2개 + 가로대 + 이름판. 여기를 지나면 다른 공간이라는 표시
+  const gateSigns = [];   // 구역 입구 문: 1인칭으로 앉아서 볼 때는 숨겨서 풍경만 남겨요 (일어나면 다시 보여요)
   function makeZoneSign(zone, gateOverride) {
     const gt = gateOverride || zone.gate;
     const g = new THREE.Group();
@@ -777,7 +778,7 @@
       const plate = addMesh(new THREE.PlaneGeometry(3.8, 0.925), new THREE.MeshBasicMaterial({ map: tex, transparent: true }), 0, 3.98, side * 0.056, g);
       if (side === -1) plate.rotation.y = Math.PI;
     });
-    g.position.set(gt.x, 0, gt.z); g.rotation.y = gt.rot; scene.add(g);
+    g.position.set(gt.x, 0, gt.z); g.rotation.y = gt.rot; scene.add(g); gateSigns.push(g);
     const c = Math.cos(gt.rot), sn = Math.sin(gt.rot);
     colliders.push({ x: gt.x + c * 2.4, z: gt.z - sn * 2.4, r: 0.3 }, { x: gt.x - c * 2.4, z: gt.z + sn * 2.4, r: 0.3 });
     console.log("[🚪 gate] 입구 문 ->", zone.name, "| 위치:", gt.x.toFixed(1), gt.z.toFixed(1));
@@ -3327,6 +3328,7 @@
     camSaved.dist = cam.dist; camSaved.pitch = cam.pitch;
     cam.dist = 8.5; cam.pitch = 0.26; cam.yaw = st.heading + Math.PI - 0.6;
     body.classList.toggle("watching", eyesOnly(st));   // 불멍·별 보기·책 읽기: 화면 글씨를 숨기고 그것만 보여줘요
+    gateSigns.forEach(function (g) { g.visible = !eyesOnly(st); });
     if (st.kind === "read") openBook();
     if (st.kind === "fire") note("🔥 불멍 중 · Q 마시멜로 · 🧪 원소로 불꽃 색 바꾸기", 4500);
     if (st.kind === "view") note("🏔️ 계곡 너머 마을 불빛과 은하수 · 마우스로 끌어서 둘러보기", 4500);
@@ -3343,6 +3345,7 @@
     cam.dist = camSaved.dist; cam.pitch = camSaved.pitch;
     cam.lookYaw = cam.lookPitch = 0;
     body.classList.remove("watching");
+    gateSigns.forEach(function (g) { g.visible = true; });
     closeBook();
     mallowOff();
     console.log("[🧍 seat] 일어남 -> 이유:", why, "| 위치 x:", player.pos.x.toFixed(1), "z:", player.pos.z.toFixed(1));
@@ -5445,7 +5448,7 @@
   // 🧪 시험 손잡이: tools/ 시험 대본이 게임 상태를 읽는 곳이에요. 화면과 동작은 바꾸지 않아요.
   window.__soft = {
     state: state, player: player, cam: cam, fire: fire, mallow: mallow, sprinkle: sprinkle, ashes: ashes,
-    net: net, others: others, printBorn: printBorn, LOOK_LIMIT: LOOK_LIMIT, renderer: renderer, scene: scene, breath: breath, seats: seats, spring: spring, peaks: peaks, rain: rain, grove: grove, sky: sky, aurora: aurora, chimes: chimes,
+    net: net, others: others, printBorn: printBorn, LOOK_LIMIT: LOOK_LIMIT, renderer: renderer, scene: scene, breath: breath, seats: seats, spring: spring, peaks: peaks, rain: rain, grove: grove, sky: sky, aurora: aurora, chimes: chimes, gateSigns: gateSigns,
     get audio() { return audio; },
     get frame() { return frame; },
     sound: {   // 소리 시험: 소리 엔진을 잠깐 OfflineAudioContext로 바꿔 끼우고 소리 함수를 불러 크기를 재요

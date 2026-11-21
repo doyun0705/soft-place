@@ -389,6 +389,8 @@ const tests = {
       await until(p, () => window.__soft.cam.pos.y > 1.2 && window.__soft.cam.pos.y < 1.9, null, '눈높이로 카메라 옮기기');
       const s = await p.evaluate(() => ({ watching: document.body.classList.contains('watching'), zone: window.__soft.state.zone }));
       check(t, s.watching && s.zone === 'chimes', '풍경 나무 벤치는 1인칭', s);
+      const signs = await p.evaluate(() => window.__soft.gateSigns.filter(g => g.visible).length);
+      check(t, signs === 0, '1인칭으로 앉으면 구역 입구 표지판을 숨김', { visible: signs });
       await until(p, () => window.__soft.aurora.group.visible && window.__soft.aurora.mats[0].uniforms.uVista.value > 0.8, null, '오로라가 나타나기');
       const t0 = await p.evaluate(() => window.__soft.aurora.mats[0].uniforms.uTime.value);
       await frames(p, 4);
