@@ -43,7 +43,17 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: 첫 화면과 이동, 공중샷 확인
+        id: play
         if: steps.script.outputs.available == 'true'
         env:
           SP_THREE: ${{ github.workspace }}/tools/node_modules/three/build/three.min.js
         run: node tools/play-check.js panel,walk,aerial --gl=swiftshader --offline
+
+      - name: 실패한 실행의 화면 보관
+        if: failure() && steps.play.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: play-check-screenshots
+          path: tools/out/*.png
+          if-no-files-found: ignore
+          retention-days: 3
