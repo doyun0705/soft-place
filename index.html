@@ -4701,7 +4701,7 @@
     LONG_EVERY: 4, LONG_BREAK: 15   // 집중을 4번 하면 긴 쉬기 15분, 그다음엔 저절로 이어 가지 않고 '계속할까요?'를 물어요 (켜 두고 떠나도 기록이 부풀지 않게)
   };
   const BASE_TITLE = document.title;
-  const study = { phase: "idle", seat: null, focus: STUDY.FOCUS, brk: STUDY.BREAK, startAt: 0, endAt: 0, melt: 0, timer: 0, drawnAt: 0, skipped: 0, jar: 0, quote: -1, round: 0, long: false, bell: null, log: { days: {} } };   // round = 이번에 이어서 한 집중 수, long = 지금이 긴 쉬기, bell = 미리 걸어 둔 종
+  const study = { phase: "idle", seat: null, focus: STUDY.FOCUS, brk: STUDY.BREAK, startAt: 0, endAt: 0, melt: 0, timer: 0, drawnAt: 0, skipped: 0, jar: 0, quote: -1, round: 0, long: false, ask: false, bell: null, log: { days: {} } };   // round = 이번에 이어서 한 집중 수, long = 지금이 긴 쉬기, bell = 미리 걸어 둔 종
   const studyEl = document.getElementById("study"), studyDim = document.getElementById("studyDim");
   const studyHead = document.getElementById("studyHead"), studyTime = document.getElementById("studyTime"), studyQuote = document.getElementById("studyQuote");
   const studySet = document.getElementById("studySet"), studyFocus = document.getElementById("studyFocus"), studyBreak = document.getElementById("studyBreak");
@@ -4745,7 +4745,7 @@
     return study.phase === "focus" ? k : 1 - k;
   }
   function updateStudyClock() {   // 남은 시간 글씨 + 탭 제목 (다른 탭에서 공부해도 보이게)
-    if (study.phase === "idle") { document.title = BASE_TITLE; return; }
+    if (study.phase === "idle") { document.title = study.ask ? "☕ 계속할까요? · " + BASE_TITLE : BASE_TITLE; return; }
     const left = fmtClock(study.endAt - Date.now());
     studyTime.textContent = left;
     document.title = (study.phase === "focus" ? "⏳ " + left + " 공부 중" : "☕ " + left + " 쉬는 중") + " · " + BASE_TITLE;
@@ -4778,6 +4778,7 @@
     stopStudy(why);
     study.seat = null;
     studyEl.hidden = true; studyDim.hidden = true;
+    study.ask = false; document.title = BASE_TITLE;   // '계속할까요?'에서 그냥 일어나도 탭 제목은 원래대로
     library.mine.visible = false;
     console.log("[📚 study] 공부 책상에서 일어남 -> 이유:", why);
   }
@@ -4791,6 +4792,7 @@
     if (out) study.bell = { at: study.endAt, out: out };
   }
   function beginPhase(ph, at, why) {
+    study.ask = false;
     study.long = ph === "break" && study.round > 0 && study.round % STUDY.LONG_EVERY === 0;   // 집중 4번째가 끝난 쉬기는 길게
     const mins = ph === "focus" ? study.focus : study.long ? Math.max(STUDY.LONG_BREAK, study.brk) : study.brk;
     study.phase = ph; study.startAt = at; study.endAt = at + mins * 60000;
@@ -4842,6 +4844,7 @@
         showStudyCard();
         studyHead.textContent = "☕ " + study.round + "번 집중했어요. 계속할까요?";
         studyGo.textContent = "계속하기";
+        study.ask = true; updateStudyClock();   // 탭 제목에도 '계속할까요?' (다른 탭에 있어도 알 수 있게)
         console.log("[⏳ study] 긴 쉬기 끝 -> 저절로 이어 가지 않고 물어봄 | 이어서 한 집중:", study.round, "번");
       } else if (late) {   // 컴퓨터가 잠들었거나 창이 오래 얼어 있었어요: 저절로 이어 가지 않아요
         study.phase = "idle"; study.melt = 0; study.long = false;

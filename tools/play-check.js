@@ -505,8 +505,8 @@ const tests = {
       check(t, lb.len === 15 && lb.head.includes('긴') && lb.round === 4, '집중 4번이면 긴 쉬기 15분', lb);
       await endSoon();
       await until(p, () => window.__soft.study.phase === 'idle', null, '긴 쉬기 끝 -> 멈추고 물어보기');
-      const ask = await p.evaluate(() => ({ head: document.getElementById('studyHead').textContent, go: document.getElementById('studyGo').textContent, shown: !document.getElementById('studyGo').hidden, today: Object.values(JSON.parse(localStorage.getItem('softplace-study')).days).reduce((a, b) => a + b, 0) }));
-      check(t, ask.head.includes('계속할까요') && ask.go === '계속하기' && ask.shown && ask.today >= 60 && ask.today < 61, '긴 쉬기 뒤엔 저절로 이어 가지 않고 "계속할까요?" 물어봄 (기록 60분)', ask);
+      const ask = await p.evaluate(() => ({ head: document.getElementById('studyHead').textContent, go: document.getElementById('studyGo').textContent, shown: !document.getElementById('studyGo').hidden, title: document.title, today: Object.values(JSON.parse(localStorage.getItem('softplace-study')).days).reduce((a, b) => a + b, 0) }));
+      check(t, ask.head.includes('계속할까요') && ask.go === '계속하기' && ask.shown && ask.title.startsWith('☕ 계속할까요') && ask.today >= 60 && ask.today < 61, '긴 쉬기 뒤엔 저절로 이어 가지 않고 "계속할까요?" 물어봄 (기록 60분)', ask);
       const jar = await p.evaluate(() => ({ full: window.__soft.library.fullJars.filter(g => g.visible).length, log: document.getElementById('studyLog').textContent }));
       check(t, jar.full === 0 && !jar.log.includes('병'), '100분 전엔 가득 찬 병 없음', jar);
       await p.click('#studyGo');
