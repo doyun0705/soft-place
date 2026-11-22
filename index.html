@@ -1814,11 +1814,15 @@
       });
     })();
     const woodU = Object.assign(THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]), u);
+    woodU.uPlank = { value: gray }; woodU.uDarkW = { value: gray };   // 사진: 바랜 마루 판자, 짙은 나무 (Codex K7, Poly Haven CC0)
+    [["weathered_planks_diff_1k.jpg", "uPlank"], ["dark_wood_diff_1k.jpg", "uDarkW"]].forEach(function (q) {
+      loadReal(q[0], function (img) { const t = img.clone(); t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping; woodU[q[1]].value = t; });
+    });
     const woodMat = new THREE.ShaderMaterial({
       uniforms: woodU, fog: true, side: THREE.DoubleSide,
       vertexShader: "#include <fog_pars_vertex>\nattribute vec2 aUv; attribute float aKind; varying vec3 vW; varying vec3 vN; varying vec2 vUv; varying float vK;\nvoid main() { vUv = aUv; vK = aKind; vN = normal; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}",
       fragmentShader: "#include <fog_pars_fragment>\n" + VISTA_NOISE + `
-        uniform vec3 uLamp, uLampCol, uSky; varying vec3 vW; varying vec3 vN; varying vec2 vUv; varying float vK;
+        uniform vec3 uLamp, uLampCol, uSky; uniform sampler2D uPlank, uDarkW; varying vec3 vW; varying vec3 vN; varying vec2 vUv; varying float vK;
         void main() {
           vec3 N = normalize(vN);
           if (!gl_FrontFacing) N = -N;
@@ -1828,15 +1832,13 @@
             float row = floor(vUv.y / 0.18), fy = fract(vUv.y / 0.18);
             float tint = h2(vec2(row, 3.0));
             g = n2(vec2(vUv.x * 1.2 + row * 7.0, fy * 9.0)) * 0.6 + n2(vec2(vUv.x * 9.0 + row, fy * 30.0)) * 0.4;
-            base = mix(vec3(0.17, 0.1, 0.06), vec3(0.3, 0.19, 0.11), tint * 0.6 + g * 0.4);
-            base *= 0.45 + 0.55 * smoothstep(0.0, 0.06, fy) * (1.0 - smoothstep(0.94, 1.0, fy));   // 판자 틈
-            base *= 0.85 + 0.15 * step(0.5, fract(vUv.x / 1.8 + h2(vec2(row, 9.0))));                // 판자 이음매
+            base = texture2D(uPlank, vec2(vUv.y / 1.62, vUv.x / 1.62)).rgb * vec3(0.9, 0.8, 0.68) * (0.88 + 0.24 * tint);   // 비바람에 바랜 마루 (사진, 판자 폭 18 cm)
           } else if (vK > 1.5) {                                                // 마구리: 나이테
             float r = length(vUv) * 40.0;
             base = mix(vec3(0.22, 0.14, 0.08), vec3(0.3, 0.2, 0.12), 0.5 + 0.5 * sin(r + n2(vUv * 30.0) * 3.0));
           } else {                                                              // 나뭇결: 길이 방향으로 길게
-            g = n2(vec2(vUv.x * 6.0, vUv.y * 0.35)) * 0.55 + n2(vec2(vUv.x * 22.0, vUv.y * 1.6)) * 0.3 + n2(vec2(vUv.x * 60.0, vUv.y * 5.0)) * 0.15;
-            base *= 0.7 + 0.6 * g;
+            vec3 dw = texture2D(uDarkW, vec2(vUv.y * 0.35, vUv.x * 0.25)).rgb;
+            base = mix(vec3(dot(dw, vec3(0.3, 0.59, 0.11))), dw, 0.45) * vec3(0.7, 0.56, 0.46);   // 짙은 나무 사진 (붉은 기를 줄여 오래된 소나무처럼)
             base *= 0.85 + 0.15 * n2(vec2(vUv.y * 0.8, 4.0 + vUv.x));
             if (vK > 0.5) base *= 0.78;                                         // 서까래는 처마 그늘이라 더 짙어요
           }
@@ -2781,7 +2783,32 @@
       g.setAttribute("color", new THREE.Float32BufferAttribute(rc, 3));
       g.computeVertexNormals();
       smoothByPosition(g);
-      addMesh(g, new THREE.MeshLambertMaterial({ vertexColors: true }), 0, 0, 0);
+      const rockU = Object.assign(THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]), { uMoonDir: u.uMoonDir, uMoonCol: u.uMoonCol, uMoon: u.uMoon, uLamp: u.uLamp, uLampCol: u.uLampCol, uRock: { value: (function () { const t = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1, THREE.RGBAFormat); t.needsUpdate = true; return t; })() } });
+      loadReal("rocks_ground_06_diff_1k.jpg", function (img) { const t = img.clone(); t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping; rockU.uRock.value = t; });   // 바위 사진 무늬
+      addMesh(g, new THREE.ShaderMaterial({   // 젖은 바위: 사진 무늬(세 방향에서 입혀요) + 달빛 반짝임, 눈은 꼭짓점 색(흰 곳)에만
+        uniforms: rockU, fog: true, vertexColors: true,
+        vertexShader: "#include <fog_pars_vertex>\nvarying vec3 vW; varying vec3 vN; varying vec3 vC;\nvoid main() { vC = color; vN = normal; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}",
+        fragmentShader: "#include <fog_pars_fragment>\n" + `
+          uniform vec3 uMoonDir, uMoonCol, uLamp, uLampCol; uniform float uMoon; uniform sampler2D uRock;
+          varying vec3 vW; varying vec3 vN; varying vec3 vC;
+          void main() {
+            vec3 N = normalize(vN), w = pow(abs(N), vec3(4.0)); w /= (w.x + w.y + w.z);
+            vec3 ph = texture2D(uRock, vW.zy * 0.7).rgb * w.x + texture2D(uRock, vW.xz * 0.7).rgb * w.y + texture2D(uRock, vW.xy * 0.7).rgb * w.z;
+            float snow = smoothstep(0.3, 0.7, vC.r);
+            float wet = 1.0 - smoothstep(0.32, 0.55, vW.y);                                              // 물에 닿는 아래쪽은 젖어 짙어요
+            vec3 rock = ph * vec3(0.36, 0.37, 0.4) * (1.0 - 0.45 * wet);
+            vec3 L = uLamp - vW; float ld = length(L); L /= ld;
+            vec3 V = normalize(cameraPosition - vW), M = normalize(uMoonDir);
+            float moon = max(dot(N, M), 0.0) * (0.4 + 0.6 * uMoon), lamp = max(dot(N, L), 0.0) * 1.5 / (1.0 + ld * ld * 0.2);
+            float spec = pow(max(dot(N, normalize(M + V)), 0.0), 36.0) * (0.15 + 0.6 * wet) * (1.0 - snow);   // 젖은 돌이 달빛에 번들거려요
+            vec3 amb = vec3(0.13, 0.15, 0.22);
+            vec3 col = rock * (amb + uMoonCol * moon * 0.75 + uLampCol * lamp) + (uMoonCol * 0.35 + uLampCol * 0.5 * lamp) * spec;
+            vec3 sc = vec3(0.78, 0.83, 0.95) * (0.3 + 0.55 * moon + 0.15 * max(N.y, 0.0)) + uLampCol * lamp * 0.5;   // 눈
+            col = mix(col, sc, snow);
+            gl_FragColor = vec4(col, 1.0);
+            #include <fog_fragment>
+          }`
+      }), 0, 0, 0);
       console.log("[🪨 spring] 물가 바위 -> 앞줄", n, "+ 뒷줄", back, "개 | 점:", rp.length / 3);
     })();
     colliders.push({ x: cx, z: cz, r: 5.1 });   // 걸어서는 못 들어가고, E로만 들어가요
