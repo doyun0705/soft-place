@@ -2664,17 +2664,48 @@
     flatCircle(4.6, lambert(0x7d4444), cx, cz, 0.075);   // 둥근 양탄자
     flatCircle(3.7, lambert(0xa86a58), cx, cz, 0.085);
     const back = Math.atan2(cz, cx), front = back + Math.PI;   // back = 광장 반대쪽(바깥), front = 광장 쪽
-    const shelfMats = [shelfTexture(), shelfTexture()].map(function (tex) { return new THREE.MeshLambertMaterial({ map: tex, emissive: 0x241a14 }); });
+    shelfTexture(); shelfTexture();   // 예전 그림 책장: 이제 안 쓰지만 rand() 순서를 지키려고 그대로 불러요 (빼면 뒤쪽 구역 모양이 바뀌어요)
+    // 📚 입체 책장 (2026-11-22 밤): 그림 한 장 대신 진짜 칸·선반·책. 책장 틀과 책은 각각 InstancedMesh 하나로 그려요 (그리기 2번)
+    const SHELF = { W: 2.6, H: 3.2, D: 0.7, SIDE: 0.1, BASE: 0.2, TOP: 0.1, BOARD: 0.04, BACK: 0.12, ROWS: 4 };
+    const brng = mulberry32(7171), frameParts = [], books = [];
+    const BOOK_INKS = [0x7a2e2a, 0x8c3b2f, 0x2f3d5c, 0x23324a, 0x2f4a3a, 0x3f5a40, 0x5a3a26, 0x6b4a2f, 0xc8b48a, 0xd6c7a2, 0x9a7a3a, 0x2a2624, 0x5c2f45, 0x7b6a55];   // 실제 책처럼 차분한 천·가죽 색
+    const shelfM = new THREE.Matrix4(), partM = new THREE.Matrix4(), pq = new THREE.Quaternion(), pv = new THREE.Vector3(), ps = new THREE.Vector3(), zAxis = new THREE.Vector3(0, 0, 1);
+    function part(list, x, y, z, w, h, d, tilt, extra) { pv.set(x, y, z); pq.setFromAxisAngle(zAxis, tilt || 0); ps.set(w, h, d); partM.compose(pv, pq, ps); list.push({ m: shelfM.clone().multiply(partM), c: extra }); }
     for (let k = -3; k <= 3; k++) {   // 책장 7개를 바깥쪽에 말굽 모양으로
       const a = back + k * 0.454;
       const sx = cx + Math.cos(a) * 7.2, sz = cz + Math.sin(a) * 7.2, th = Math.atan2(-Math.cos(a), -Math.sin(a));
       const g = new THREE.Group();
-      addMesh(new THREE.BoxGeometry(2.6, 3.2, 0.7), MAT.darkWood, 0, 1.6, 0, g);
-      addMesh(new THREE.PlaneGeometry(2.4, 2.95), shelfMats[(k + 3) % 2], 0, 1.62, 0.36, g);
+      const S = SHELF, inW = S.W - 2 * S.SIDE, rowH = (S.H - S.BASE - S.TOP) / S.ROWS, backZ = -S.D / 2 + S.BACK;
+      addMesh(new THREE.BoxGeometry(S.W, S.H, S.BACK), MAT.darkWood, 0, S.H / 2, -S.D / 2 + S.BACK / 2, g);   // 뒤판
+      shelfM.makeRotationY(th).setPosition(sx, 0, sz);
+      [-1, 1].forEach(function (sd) { part(frameParts, sd * (S.W - S.SIDE) / 2, S.H / 2, 0, S.SIDE, S.H, S.D); });   // 옆판
+      part(frameParts, 0, S.H - S.TOP / 2, 0, S.W, S.TOP, S.D);   // 윗판
+      part(frameParts, 0, S.BASE / 2, 0.01, S.W, S.BASE, S.D + 0.02);   // 받침
+      for (let r = 1; r < S.ROWS; r++) part(frameParts, 0, S.BASE + r * rowH, 0.005, inW, S.BOARD, S.D - S.BACK + 0.01);   // 선반 판
+      for (let r = 0; r < S.ROWS; r++) {   // 칸마다 책을 왼쪽부터 꽂아요 (가끔 빈자리, 가끔 비스듬히 기댄 책)
+        const floor = S.BASE + r * rowH + (r ? S.BOARD / 2 : 0), room = rowH - (r ? S.BOARD : 0) - 0.04;
+        let x = -inW / 2 + 0.01;
+        while (x < inW / 2 - 0.03) {
+          const w = 0.028 + brng() * 0.045, h = Math.min(room, room * (0.62 + brng() * 0.36)), d = 0.24 + brng() * 0.14;
+          if (x + w > inW / 2 - 0.005) break;
+          if (brng() < 0.06) { x += 0.06 + brng() * 0.12; continue; }   // 빈자리
+          const lean = brng() < 0.05 ? -0.12 - brng() * 0.1 : 0;   // 가끔 오른쪽으로 기댄 책
+          const col = new THREE.Color(BOOK_INKS[Math.floor(brng() * BOOK_INKS.length)]).multiplyScalar(0.8 + brng() * 0.35);
+          part(books, x + w / 2 + (lean ? -Math.sin(lean) * h * 0.5 : 0), floor + h / 2 * Math.cos(lean), backZ + d / 2 + 0.01, w, h, d, lean, col);
+          x += w + (lean ? h * Math.abs(Math.sin(lean)) * 0.9 : 0.002);
+        }
+      }
       addMesh(new THREE.BoxGeometry(2.9, 0.22, 1.05), MAT.snow, 0, 3.31, 0, g);   // 책장 위에 쌓인 눈
       g.position.set(sx, 0, sz); g.rotation.y = th; scene.add(g);
       [-0.65, 0.65].forEach(function (off) { colliders.push({ x: sx + Math.cos(th) * off, z: sz - Math.sin(th) * off, r: 0.8 }); });
     }
+    const frameMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), MAT.darkWood, frameParts.length);
+    frameParts.forEach(function (q, i) { frameMesh.setMatrixAt(i, q.m); });
+    const bookMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0xffffff }), books.length);
+    books.forEach(function (q, i) { bookMesh.setMatrixAt(i, q.m); bookMesh.setColorAt(i, q.c.convertSRGBToLinear()); });
+    scene.add(frameMesh); scene.add(bookMesh);
+    library.books = bookMesh;
+    console.log("[📚 library] 입체 책장 -> 틀 조각", frameParts.length, "개 + 책", books.length, "권 (그리기 2번)");
     // 가운데 탁자 + 스탠드 + 책 3권
     addMesh(new THREE.CylinderGeometry(0.95, 0.8, 0.62, 14), MAT.wood, cx, 0.31, cz);
     addMesh(new THREE.CylinderGeometry(0.05, 0.07, 1.3, 6), MAT.dark, cx, 1.27, cz);
@@ -4789,7 +4820,7 @@
     const delay = (study.endAt - Date.now()) / 1000;
     if (delay < 0.05) return;
     const out = playBell(study.phase, delay);
-    if (out) study.bell = { at: study.endAt, out: out };
+    if (out) study.bell = { at: study.endAt, t: audio.ctx.currentTime + delay, out: out };   // t = 소리 시계로 울릴 시각
   }
   function beginPhase(ph, at, why) {
     study.ask = false;
@@ -4835,8 +4866,8 @@
     if (now >= study.endAt) {
       const ended = study.phase, endAt = study.endAt, late = now - endAt > STUDY.LATE_MS, wasLong = study.long;
       if (ended === "focus") { study.round++; addStudyMinutes(study.focus, "집중 끝 (" + study.round + "번째)"); }
-      if (study.bell && study.bell.at === endAt) study.bell = null;   // 미리 걸어 둔 종은 이미 울렸거나 울리는 중이라 끊지 않아요
-      else { cancelBell(); playBell(ended); }
+      if (study.bell && study.bell.at === endAt && audio.ctx.currentTime >= study.bell.t - 0.05) study.bell = null;   // 미리 걸어 둔 종이 이미 울렸거나 울리는 중: 끊지 않아요
+      else { cancelBell(); playBell(ended); }   // 아직 안 울린 종(소리 시계가 멈췄다 켜진 경우 등)은 끊고 지금 울려요 (Codex K8 #12)
       if (!late && ended === "break" && wasLong) {   // 긴 쉬기가 끝나면 저절로 이어 가지 않고 물어봐요
         study.phase = "idle"; study.melt = 0; study.long = false;
         clearInterval(study.timer); study.timer = 0;
