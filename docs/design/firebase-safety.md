@@ -55,6 +55,8 @@ PC에서 `main`의 규칙을 Realtime Database 에뮬레이터 4.11.2에 올려 
 
 같은 UID가 여러 자리를 차지하는 문제는, 자리와 회원 기록을 한 요청에서 함께 쓰거나 함께 지우는 별도 시험 규칙으로 확인했어요. 두 경로가 서로 맞을 때만 변경을 허용하자 한쪽만 바꾸거나 한 UID로 두 번째 자리를 잡으려는 요청은 거부됐어요. 이 경우에도 최대 12자리와 반환한 자리의 재사용을 확인했어요. 연결 종료 뒤 남은 자리 정리와 새 익명 계정을 반복 생성하는 경우는 별도예요. [Realtime Database의 여러 위치 동시 갱신](https://firebase.google.com/docs/database/web/read-and-write#update_specific_fields)
 
+이 시험 규칙에서 `update()`로 입장하거나 직접 퇴장하면 자리와 회원 기록이 함께 변경됐어요. 같은 두 경로를 지우는 `onDisconnect().update()`의 등록은 입장 전과 입장 후 모두 거부됐어요. 주소를 연결하기 전에 명시적 퇴장과 연결 종료를 따로 검증해야 해요. 여러 탭이 같은 UID의 한 자리를 공유할 때는 한 탭만 닫아도 다른 탭의 자리가 유지되어야 해요. 탭별 `onDisconnect`가 세션만 지우고, 마지막 세션이 끝났을 때 공유 자리를 회수할 방법은 입장 방식과 함께 정해요. [Realtime Database 연결 종료 처리](https://firebase.google.com/docs/database/web/offline-capabilities)
+
 시험에서 확인한 RTDB 상태 갱신 규칙의 일부예요. 이 조건은 별도의 UID 쓰기 규칙과 함께 적용해요. `t`는 서버 시각으로 보내고, 150ms는 이 시험의 값이에요.
 
 ```json
@@ -69,5 +71,7 @@ PC에서 `main`의 규칙을 Realtime Database 에뮬레이터 4.11.2에 올려 
 ### 뒤로 보낸 탭과 연결 종료
 
 현재 20초 규칙은 애니메이션 프레임에서 보낸 갱신이 멈추면 상대 화면에서 지워요. Chrome은 숨긴 탭의 프레임을 멈추고 타이머도 늦출 수 있어요. 온라인 방에서는 서버의 세션 삭제를 퇴장의 기준으로 삼고, 숨은 탭은 마지막 위치에 멈춘 상태로 표시하는 안을 시험해요. 기록이 남은 채 탭이 실제로 종료되는 경우에는 `onDisconnect`가 제거하고, 재접속한 탭은 새 연결에 제거를 다시 등록해요. 20초 로컬 시험 동작과 온라인 방의 표시 방법은 별도로 시험해요. [Chrome 숨은 탭 동작](https://developer.chrome.com/blog/timer-throttling-in-chrome-88) · [Firebase 연결 종료 처리](https://firebase.google.com/docs/database/web/offline-capabilities)
+
+도서관 공부(PR #12)는 친구 방의 플레이 상태에만 녹은 정도 `s`를 보내요. PR #12 규칙을 로컬 에뮬레이터에 올려 친구 방의 `0`, `0.6`, `1` 숫자와 공부를 멈춘 뒤 `s`를 생략한 상태는 허용하고, 문자열·범위 밖 숫자·랜덤 방의 `s`는 거부함을 확인했어요. 인증 규칙을 만들 때도 이 조건을 유지해요. 날짜별 공부 기록은 해당 브라우저에 저장해요.
 
 실제 익명 인증을 붙일 때 기존 Firebase SDK와 같은 버전의 `firebase-auth-compat.js`를 사용하고, 이미 쓰는 Firebase CDN의 예외를 `AGENTS.md`에 기록하는 협의가 필요해요. 실패 화면 문구는 Claude, 연결 처리와 규칙은 Codex 범위예요.
