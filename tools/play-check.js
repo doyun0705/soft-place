@@ -515,13 +515,27 @@ const tests = {
       await until(p, () => window.__soft.study.phase === 'idle', null, '늦게 알아채면 멈추기');
       s = await S();
       check(t, s.head.includes('자리를 비운') && s.today >= 90 && s.today < 91 && s.title === 'Soft Place', '끝날 시각을 3분 넘겨 알아채면 그 집중만 기록하고 이어 가지 않음', s);
+      // 끝날 시각을 넘긴 채 1초 타이머보다 먼저 멈추면(그만하기·창 닫기) 정한 시간까지만 기록해요 (Codex K8 #12: 28분이 기록되던 버그)
+      for (const how of ['그만하기', '창 닫기']) {
+        const before = (await S()).today;
+        await p.click('#studyGo');
+        const len = await p.evaluate(h => {   // 시각 옮기기와 멈추기를 한 번에 해서 1초 타이머가 끼어들 틈이 없게
+          const st = window.__soft.study, L = st.endAt - st.startAt;
+          st.endAt = Date.now() - 3 * 60000; st.startAt = st.endAt - L;
+          if (h === '그만하기') document.getElementById('studyStop').click(); else window.dispatchEvent(new Event('pagehide'));
+          return L / 60000;
+        }, how);
+        s = await S();
+        check(t, s.phase === 'idle' && Math.abs(s.today - before - len) < 0.05, how + ': 끝날 시각을 3분 넘겨 멈춰도 정한 ' + len + '분만 기록', { before, after: s.today });
+      }
+      const base = (await S()).today;
       await p.click('#studyGo');
       await skip(2 * 60000);
       await press(p, 'KeyE');
       await until(p, () => !window.__soft.player.seat, null, 'E로 일어나기');
       await until(p, () => window.__soft.player.parts.melt === 0, null, '일어나면 눈사람 원래대로');
       s = await S();
-      check(t, s.phase === 'idle' && !s.card && s.today >= 92 && s.today < 93 && s.title === 'Soft Place', '중간에 일어나도 한 만큼(2분) 기록, 카드·제목 원래대로', s);
+      check(t, s.phase === 'idle' && !s.card && s.today - base >= 2 && s.today - base < 3 && s.title === 'Soft Place', '중간에 일어나도 한 만큼(2분) 기록, 카드·제목 원래대로', s);
       await ctx.close();
     },
   },

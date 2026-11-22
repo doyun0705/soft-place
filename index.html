@@ -4819,7 +4819,7 @@
   function stopStudy(why) {
     if (study.phase === "idle") return;
     const was = study.phase;
-    if (was === "focus") addStudyMinutes((Date.now() - study.startAt) / 60000, "집중 중간에 멈춤 (" + why + ")");   // 중간에 멈춰도 한 만큼은 남겨요 (벌처럼 안 느껴지게)
+    if (was === "focus") addStudyMinutes((Math.min(Date.now(), study.endAt) - study.startAt) / 60000, "집중 중간에 멈춤 (" + why + ")");   // 중간에 멈춰도 한 만큼은 남겨요 (벌처럼 안 느껴지게). 끝날 시각을 넘겨도 정한 시간까지만 (Codex K8 #12)
     study.phase = "idle"; study.melt = 0; study.long = false;
     cancelBell();
     clearInterval(study.timer); study.timer = 0;
@@ -4864,7 +4864,7 @@
     const parts = player.parts, target = study.seat ? study.melt : 0;
     if (parts.melt !== target) setMelt(parts, Math.abs(target - parts.melt) < 0.002 ? target : parts.melt + (target - parts.melt) * (1 - Math.exp(-dt * 3)));
     if (library.mine.visible) {   // 지금 하고 있는 집중도 물로 쳐요 (눈사람이 녹는 만큼 병이 차올라요)
-      const doing = study.phase === "focus" ? (now - study.startAt) / 60000 : 0;
+      const doing = study.phase === "focus" ? (Math.min(now, study.endAt) - study.startAt) / 60000 : 0;
       const total = todayMinutes() + doing, fill = (total % STUDY.JAR_FULL) / STUDY.JAR_FULL, jars = Math.floor(total / STUDY.JAR_FULL);
       if (fill < study.jar - 0.5) { study.jar = 0; console.log("[🫙 study] 병이 가득 참 -> 책상 옆에 내려놓고 새 병 | 오늘 병", jars, "개"); }   // 가득 찬 병은 내려놓고 빈 병부터
       study.jar += (fill - study.jar) * (1 - Math.exp(-dt * 1.5));
