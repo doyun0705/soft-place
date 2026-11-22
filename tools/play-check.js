@@ -37,7 +37,7 @@ const PLAZA = { x: -4, z: 6, yaw: 0.6 };         // 중앙 광장 (눈이라 발
 const BEACH_BENCH = { x: 4, z: 81.8, yaw: 0 };   // 파도 해변 벤치 앞 (E 누르면 바다를 보고 앉아요)
 const SPRING_EDGE = { x: -65.9, z: 72, yaw: 0 };   // 눈꽃 온천 남쪽 물가 (E 누르면 몸을 담가요)
 const CHIMES_BENCH = { x: 70.4, z: 69.3, yaw: 0 };   // 풍경 나무 동남쪽 벤치 앞 (E 누르면 느티나무와 북쪽 하늘을 보고 앉아요)
-const RAIN_BENCH = { x: -80, z: 0.3, yaw: 0 };   // 비 오는 숲 정자 안 벤치 앞 (E 누르면 남쪽을 보고 앉아요)
+const RAIN_BENCH = { x: -80, z: 0.3, yaw: 0 };   // 비 오는 숲 정자 마루 가운데 (E 누르면 마루 안쪽에 앉아 남쪽 연못을 봐요)
 
 // ---------- 작은 웹 서버: 저장소 폴더를 그대로 보여 줘요 ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript', '.jpg': 'image/jpeg', '.png': 'image/png', '.json': 'application/json' };
@@ -360,7 +360,7 @@ const tests = {
   },
 
   rain: {
-    what: '비 오는 숲 정자 벤치: 1인칭으로 앉으면 안개 속 큰 나무가 보이고, 처마 물방울이 떨어지고, 달은 구름 뒤로 숨어요',
+    what: '비 오는 숲 정자: 마루에 앉으면 1인칭으로 연못과 안개 속 큰 나무가 보이고, 연못에 장면이 비치고, 처마 물방울이 떨어지고, 달은 구름 뒤로 숨어요',
     run: async t => {
       const ctx = await newContext();
       const p = await open(ctx, t, RAIN_BENCH);
@@ -373,6 +373,8 @@ const tests = {
       await frames(p, 4);
       const y1 = await p.evaluate(() => window.__soft.rain.drips.map(d => d.y).join());
       check(t, y0 !== y1, '처마 물방울이 떨어짐');
+      await until(p, () => window.__soft.rain.mirrorOn === true, null, '앉아 있으면 연못에 장면이 비침 (거울 카메라)');
+      check(t, true, '연못 거울 카메라 켜짐');
       await until(p, () => window.__soft.sky.moon.material.opacity < 0.05, null, '달이 구름 뒤로 숨기');
       check(t, true, '비 오는 숲에서는 달이 안 보임');
       await shot(t, p, 'rain');
