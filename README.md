@@ -49,6 +49,11 @@
 
 사진 텍스처는 [Poly Haven](https://polyhaven.com)에서 받았어요 (CC0, 누구나 자유롭게 사용): Forest Ground 06, Rocks Ground 06, Bark Brown 01. 눈은 일부러 사진 대신 뽀송한 그림 눈으로 그려요. 웹에서 빨리 뜨게 1K 사진을 줄이고, 울퉁불퉁 정보(normal map)는 EXR에서 JPG로 바꿨어요.
 
+정자와 노천탕용 텍스처도 Poly Haven의 CC0 자산이에요. 재질마다 1K JPG로 색(`diff`), OpenGL 노멀(`nor_gl`), 거칠기(`rough`)를 넣었어요.
+
+- 건축 재질은 [Weathered Planks](https://polyhaven.com/a/weathered_planks), [Dark Wood](https://polyhaven.com/a/dark_wood), [Grey Roof Tiles](https://polyhaven.com/a/grey_roof_tiles), [Bamboo Wall](https://polyhaven.com/a/bamboo_wall)이에요.
+- 지면과 바위 재질은 [Mud Forest](https://polyhaven.com/a/mud_forest), [Mossy Rock](https://polyhaven.com/a/mossy_rock), [Stone Pathway](https://polyhaven.com/a/stone_pathway), [Seaside Rock](https://polyhaven.com/a/seaside_rock)이에요.
+
 ## 도움이 필요할 때
 
 마음이 많이 힘들 땐 혼자 버티지 말아요. 한국 109 · 다른 나라 https://findahelpline.com
