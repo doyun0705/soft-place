@@ -3104,7 +3104,8 @@
           const ra = br() * Math.PI, w = 0.3 + br() * 0.3, h = 0.45 + br() * 0.4, od = 0.25 + br() * 0.4, ox = Math.cos(ra + 1.2) * od, oz = Math.sin(ra + 1.2) * od, b = LEAF.pos.length / 3, s2 = br();
           const ex = Math.cos(ra) * w, ez = Math.sin(ra) * w;
           LEAF.pos.push(cx0 + ox - ex, cy - h * 0.5, cz0 + oz - ez, cx0 + ox + ex, cy - h * 0.5, cz0 + oz + ez, cx0 + ox + ex, cy + h * 0.5, cz0 + oz + ez, cx0 + ox - ex, cy + h * 0.5, cz0 + oz - ez);
-          LEAF.q.push(-w, 0, w, 0, w, h, -w, h);   // 판 위 좌표를 m 단위로 (댓잎 크기를 실제 크기로 그려요) LEAF.sd.push(s2, s2, s2, s2);
+          LEAF.q.push(-w, 0, w, 0, w, h, -w, h);   // 판 위 좌표를 m 단위로 (댓잎 크기를 실제 크기로 그려요)
+          LEAF.sd.push(s2, s2, s2, s2);   // 다발마다 댓잎 모양 씨앗 (예전엔 윗줄 주석에 묻혀 빠져서 WebKit이 이 그리기를 거부했어요, Codex K8)
           LEAF.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
         }
       }
