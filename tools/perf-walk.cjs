@@ -50,6 +50,7 @@ async function measure(browser, url, spot) {
       window.claude = { hot: { data: { mode: 'play', ...start } } };
     }, spot.start);
     await page.goto(url, { waitUntil: 'domcontentloaded' });
+    await page.bringToFront();
     await page.waitForFunction(() => window.__soft?.frame > 2);
     const environment = await page.evaluate(() => {
       const renderer = window.__soft.renderer;
@@ -74,6 +75,14 @@ async function measure(browser, url, spot) {
     const sample = await page.evaluate(() => new Promise(resolve => {
       const { player, renderer } = window.__soft;
       const origin = player.pos.clone();
+      const startedVisible = document.visibilityState === 'visible';
+      const startedFocused = document.hasFocus();
+      let hiddenDuringSample = !startedVisible;
+      let lostFocus = !startedFocused;
+      const checkVisibility = () => { if (document.hidden) hiddenDuringSample = true; };
+      const checkFocus = () => { lostFocus = true; };
+      document.addEventListener('visibilitychange', checkVisibility);
+      window.addEventListener('blur', checkFocus);
       const intervals = [];
       let calls = 0;
       let triangles = 0;
@@ -93,12 +102,18 @@ async function measure(browser, url, spot) {
           return;
         }
         intervals.sort((a, b) => a - b);
+        document.removeEventListener('visibilitychange', checkVisibility);
+        window.removeEventListener('blur', checkFocus);
         resolve({
           frames: intervals.length,
           meanMs: total / intervals.length,
           p99Ms: intervals[Math.ceil(intervals.length * 0.99) - 1],
           maxMs: intervals.at(-1),
           distance: player.pos.distanceTo(origin),
+          startedVisible,
+          startedFocused,
+          hiddenDuringSample,
+          lostFocus,
           calls,
           triangles
         });
