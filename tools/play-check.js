@@ -34,6 +34,10 @@ const WAIT_MS = Number(process.env.SP_WAIT_MS) || 120000;
 const FIRE_SEAT = { x: 0, z: -86.2, yaw: 0 };    // 모닥불 앞 통나무 (E 누르면 불멍)
 const VIEW_SEAT = { x: 3, z: -96, yaw: 0 };      // 캠핑장 절벽 전망 자리
 const PLAZA = { x: -4, z: 6, yaw: 0.6 };         // 중앙 광장 (눈이라 발자국이 남아요)
+const BEACH_BENCH = { x: 4, z: 81.8, yaw: 0 };   // 파도 해변 벤치 앞 (E 누르면 바다를 보고 앉아요)
+const SPRING_EDGE = { x: -65.9, z: 72, yaw: 0 };   // 눈꽃 온천 남쪽 물가 (E 누르면 몸을 담가요)
+const CHIMES_BENCH = { x: 70.4, z: 69.3, yaw: 0 };   // 풍경 나무 동남쪽 벤치 앞 (E 누르면 느티나무와 북쪽 하늘을 보고 앉아요)
+const RAIN_BENCH = { x: -80, z: 0.3, yaw: 0 };   // 비 오는 숲 정자 마루 가운데 (E 누르면 마루 안쪽에 앉아 남쪽 연못을 봐요)
 
 // ---------- 작은 웹 서버: 저장소 폴더를 그대로 보여 줘요 ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript', '.jpg': 'image/jpeg', '.png': 'image/png', '.json': 'application/json' };
@@ -298,6 +302,110 @@ const tests = {
       check(t, s.pitch >= -s.lim[1] - 1e-6 && s.pitch <= s.lim[2] + 1e-6, '위아래도 정해진 만큼만', s);
       await shot(t, p, 'look');
       await ctx.close();
+    },
+  },
+
+  seats: {
+    what: '앉은 자리 1인칭: 해변 벤치는 내 눈으로 보고(눈사람·글씨 숨김), B로 숨 흔들림 끄고 켜고, 수다 마당 그루터기는 3인칭 그대로',
+    run: async t => {
+      const ctx = await newContext();
+      const p = await open(ctx, t, BEACH_BENCH);
+      await p.click('#btnSound');   // 파도 소리(화면 파도와 같은 박자)도 같이 돌려 봐요
+      await until(p, () => !!window.__soft.audio, null, '소리 엔진 켜기');
+      await sit(p, 'sit');
+      await until(p, () => window.__soft.cam.pos.y > 1.2 && window.__soft.cam.pos.y < 1.9, null, '눈높이로 카메라 옮기기');
+      const s = await p.evaluate(() => ({ watching: document.body.classList.contains('watching'), hidden: !window.__soft.player.parts.group.visible, y: +window.__soft.cam.pos.y.toFixed(2) }));
+      check(t, s.watching && s.hidden, '해변 벤치에 앉으면 1인칭 (눈사람과 화면 글씨 숨김)', s);
+      const b0 = await p.evaluate(() => window.__soft.breath.on);
+      await press(p, 'KeyB');
+      check(t, (await p.evaluate(() => window.__soft.breath.on)) === !b0, 'B로 숨 흔들림 ' + (b0 ? '끄기' : '켜기'));
+      await press(p, 'KeyB');
+      check(t, (await p.evaluate(() => window.__soft.breath.on)) === b0, 'B를 한 번 더 누르면 돌아옴');
+      await frames(p, 5);
+      await shot(t, p, 'beach');
+      const stump = await p.evaluate(() => { const st = window.__soft.seats.find(x => x.third); return st && { x: st.x + Math.sin(st.heading) * 1.3, z: st.z + Math.cos(st.heading) * 1.3 }; });
+      check(t, !!stump, '3인칭으로 남긴 자리(그루터기)가 있음');
+      await ctx.close();
+      const ctx2 = await newContext();
+      const q = await open(ctx2, t, { x: stump.x, z: stump.z, yaw: 0 });
+      await sit(q, 'sit');
+      await frames(q, 3);
+      const r = await q.evaluate(() => ({ third: !!window.__soft.player.seat.third, watching: document.body.classList.contains('watching'), shown: window.__soft.player.parts.group.visible }));
+      check(t, r.third && !r.watching && r.shown, '그루터기는 3인칭 (내 눈사람이 보임)', r);
+      await ctx2.close();
+    },
+  },
+
+  spring: {
+    what: '온천 몸 담그기: 1인칭 눈높이가 물 바로 위, 김이 보이고, 둘레 설산은 온천에 있을 때만 보여요',
+    run: async t => {
+      const ctx = await newContext();
+      const p = await open(ctx, t, SPRING_EDGE);
+      await sit(p, 'soak');
+      await until(p, () => window.__soft.cam.pos.y > 0.5 && window.__soft.cam.pos.y < 1.05, null, '물 위 눈높이로 카메라 옮기기');
+      const s = await p.evaluate(() => ({ watching: document.body.classList.contains('watching'), y: +window.__soft.cam.pos.y.toFixed(2), steam: window.__soft.spring.steam.visible }));
+      check(t, s.watching && s.steam, '몸을 담그면 1인칭이고 김이 보임', s);
+      await until(p, () => window.__soft.peaks.group.visible && window.__soft.peaks.mats[0].uniforms.uVista.value > 0.6, null, '둘레 설산이 나타나기');
+      check(t, true, '온천에서는 둘레 설산이 보임');
+      await frames(p, 5);
+      await shot(t, p, 'spring');
+      await ctx.close();
+      const ctx2 = await newContext();
+      const q = await open(ctx2, t, BEACH_BENCH);
+      await frames(q, 30);
+      const far = await q.evaluate(() => window.__soft.peaks.group.visible);
+      check(t, !far, '해변에서는 온천 설산을 그리지 않음', { visible: far });
+      await ctx2.close();
+    },
+  },
+
+  rain: {
+    what: '비 오는 숲 정자: 마루에 앉으면 1인칭으로 연못과 안개 속 큰 나무가 보이고, 연못에 장면이 비치고, 처마 물방울이 떨어지고, 달은 구름 뒤로 숨어요',
+    run: async t => {
+      const ctx = await newContext();
+      const p = await open(ctx, t, RAIN_BENCH);
+      await sit(p, 'sit');
+      await until(p, () => window.__soft.cam.pos.y > 1.2 && window.__soft.cam.pos.y < 1.9, null, '눈높이로 카메라 옮기기');
+      const s = await p.evaluate(() => ({ watching: document.body.classList.contains('watching'), cover: +window.__soft.rain.cover.toFixed(2) }));
+      check(t, s.watching && s.cover === 1, '정자 벤치는 1인칭이고 큰 나무 숲 안', s);
+      await until(p, () => window.__soft.grove.group.visible && window.__soft.grove.mats[0].uniforms.uVista.value > 0.9, null, '큰 나무 줄기가 보이기');
+      const y0 = await p.evaluate(() => window.__soft.rain.drips.map(d => d.y).join());
+      await frames(p, 4);
+      const y1 = await p.evaluate(() => window.__soft.rain.drips.map(d => d.y).join());
+      check(t, y0 !== y1, '처마 물방울이 떨어짐');
+      await until(p, () => window.__soft.rain.mirrorOn === true, null, '앉아 있으면 연못에 장면이 비침 (거울 카메라)');
+      check(t, true, '연못 거울 카메라 켜짐');
+      await until(p, () => window.__soft.sky.moon.material.opacity < 0.05, null, '달이 구름 뒤로 숨기');
+      check(t, true, '비 오는 숲에서는 달이 안 보임');
+      await shot(t, p, 'rain');
+      await ctx.close();
+    },
+  },
+
+  chimes: {
+    what: '풍경 나무 벤치: 1인칭으로 앉으면 느티나무 가지 너머 북쪽 하늘에 오로라가 보이고, 다른 공간에서는 오로라를 그리지 않아요',
+    run: async t => {
+      const ctx = await newContext();
+      const p = await open(ctx, t, CHIMES_BENCH);
+      await sit(p, 'sit');
+      await until(p, () => window.__soft.cam.pos.y > 1.2 && window.__soft.cam.pos.y < 1.9, null, '눈높이로 카메라 옮기기');
+      const s = await p.evaluate(() => ({ watching: document.body.classList.contains('watching'), zone: window.__soft.state.zone }));
+      check(t, s.watching && s.zone === 'chimes', '풍경 나무 벤치는 1인칭', s);
+      const signs = await p.evaluate(() => window.__soft.gateSigns.filter(g => g.visible).length);
+      check(t, signs === 0, '1인칭으로 앉으면 구역 입구 표지판을 숨김', { visible: signs });
+      await until(p, () => window.__soft.aurora.group.visible && window.__soft.aurora.mats[0].uniforms.uVista.value > 0.8, null, '오로라가 나타나기');
+      const t0 = await p.evaluate(() => window.__soft.aurora.mats[0].uniforms.uTime.value);
+      await frames(p, 4);
+      const t1 = await p.evaluate(() => window.__soft.aurora.mats[0].uniforms.uTime.value);
+      check(t, t1 !== t0, '오로라가 천천히 움직임');
+      await shot(t, p, 'chimes');
+      await ctx.close();
+      const ctx2 = await newContext();
+      const q = await open(ctx2, t, BEACH_BENCH);
+      await frames(q, 30);
+      const far = await q.evaluate(() => window.__soft.aurora.group.visible);
+      check(t, !far, '해변에서는 오로라를 그리지 않음', { visible: far });
+      await ctx2.close();
     },
   },
 
