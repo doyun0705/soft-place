@@ -497,17 +497,31 @@ const tests = {
       await endSoon();
       await until(p, () => window.__soft.study.phase === 'focus', null, '쉬는 시간 끝 -> 저절로 다음 집중');
       check(t, (await S()).today >= 30 && (await S()).today < 31, '쉬는 시간은 기록에 안 들어감');
+      // 집중 4번째가 끝나면 긴 쉬기 15분, 그 뒤엔 저절로 이어 가지 않고 '계속할까요?' (켜 두고 떠나도 기록이 안 부풀게)
+      await p.evaluate(() => { window.__soft.study.round = 3; });
+      await endSoon();
+      await until(p, () => window.__soft.study.phase === 'break', null, '4번째 집중 끝 -> 긴 쉬기');
+      const lb = await p.evaluate(() => ({ len: (window.__soft.study.endAt - window.__soft.study.startAt) / 60000, head: document.getElementById('studyHead').textContent, round: window.__soft.study.round }));
+      check(t, lb.len === 15 && lb.head.includes('긴') && lb.round === 4, '집중 4번이면 긴 쉬기 15분', lb);
+      await endSoon();
+      await until(p, () => window.__soft.study.phase === 'idle', null, '긴 쉬기 끝 -> 멈추고 물어보기');
+      const ask = await p.evaluate(() => ({ head: document.getElementById('studyHead').textContent, go: document.getElementById('studyGo').textContent, shown: !document.getElementById('studyGo').hidden, today: Object.values(JSON.parse(localStorage.getItem('softplace-study')).days).reduce((a, b) => a + b, 0) }));
+      check(t, ask.head.includes('계속할까요') && ask.go === '계속하기' && ask.shown && ask.today >= 60 && ask.today < 61, '긴 쉬기 뒤엔 저절로 이어 가지 않고 "계속할까요?" 물어봄 (기록 60분)', ask);
+      const jar = await p.evaluate(() => ({ full: window.__soft.library.fullJars.filter(g => g.visible).length, log: document.getElementById('studyLog').textContent }));
+      check(t, jar.full === 0 && !jar.log.includes('병'), '100분 전엔 가득 찬 병 없음', jar);
+      await p.click('#studyGo');
+      await until(p, () => window.__soft.study.phase === 'focus' && window.__soft.study.round === 0, null, '계속하기 -> 다시 집중 (센 수는 처음부터)');
       await p.evaluate(() => { const s = window.__soft.study; s.endAt = Date.now() - 3 * 60000; s.startAt = s.endAt - 30 * 60000; });   // 컴퓨터가 잠들었다 깬 것처럼
       await until(p, () => window.__soft.study.phase === 'idle', null, '늦게 알아채면 멈추기');
       s = await S();
-      check(t, s.head.includes('자리를 비운') && s.today >= 60 && s.today < 61 && s.title === 'Soft Place', '끝날 시각을 3분 넘겨 알아채면 그 집중만 기록하고 이어 가지 않음', s);
+      check(t, s.head.includes('자리를 비운') && s.today >= 90 && s.today < 91 && s.title === 'Soft Place', '끝날 시각을 3분 넘겨 알아채면 그 집중만 기록하고 이어 가지 않음', s);
       await p.click('#studyGo');
       await skip(2 * 60000);
       await press(p, 'KeyE');
       await until(p, () => !window.__soft.player.seat, null, 'E로 일어나기');
       await until(p, () => window.__soft.player.parts.melt === 0, null, '일어나면 눈사람 원래대로');
       s = await S();
-      check(t, s.phase === 'idle' && !s.card && s.today >= 62 && s.today < 63 && s.title === 'Soft Place', '중간에 일어나도 한 만큼(2분) 기록, 카드·제목 원래대로', s);
+      check(t, s.phase === 'idle' && !s.card && s.today >= 92 && s.today < 93 && s.title === 'Soft Place', '중간에 일어나도 한 만큼(2분) 기록, 카드·제목 원래대로', s);
       await ctx.close();
     },
   },

@@ -189,6 +189,9 @@
     background: rgba(8, 10, 24, .58); border: 1px solid var(--line); backdrop-filter: blur(6px);
     display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; transition: opacity .4s;
   }
+  @media (min-width: 760px) and (min-aspect-ratio: 6/5) {   /* 넓은 화면: 카드는 왼쪽에 두고 눈사람 얼굴은 비워 둬요 */
+    .study { left: calc(env(safe-area-inset-left, 0px) + 28px); top: 50%; transform: translateY(-50%); width: 300px; }
+  }
   .study[hidden], .study [hidden] { display: none; }
   .study.running { opacity: .7; }
   .study.running:hover, .study.running:focus-within { opacity: 1; }
@@ -212,7 +215,7 @@
     font-family: var(--font-display); font-size: 13px; color: var(--muted);
   }
   .study-stop:hover, .study-stop:focus-visible { color: var(--ink); }
-  .study-log { font-size: 12px; color: var(--muted); }
+  .study-log { font-size: 12px; color: var(--muted); word-break: keep-all; text-wrap: balance; }
   .study-dim { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse 70% 75% at 50% 62%, rgba(3,4,14,0) 40%, rgba(3,4,14,.62) 100%); }
   .study-dim[hidden] { display: none; }
   body.zen .hud, body.zen .nametag { opacity: 0; pointer-events: none; }
@@ -570,7 +573,8 @@
   scene.background = new THREE.Color(0x141a3a);
   scene.fog = new THREE.Fog(0x141a3a, 40, 120);
 
-  const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1500);
+  const BASE_FOV = 55;
+  const camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.1, 1500);
 
   const hemiLight = new THREE.HemisphereLight(0x8e9fe6, 0x2a2440, 0.5);
   scene.add(hemiLight);
@@ -2707,9 +2711,9 @@
         const pg = addMesh(new THREE.BoxGeometry(0.25, 0.014, 0.34), paper, s * 0.127, T + 0.012, -0.1, g);
         pg.rotation.z = -s * 0.09;
       });
-      addMesh(new THREE.CylinderGeometry(0.07, 0.085, 0.03, 10), MAT.dark, -0.58, T + 0.015, -0.18, g);      // 작은 스탠드 받침
-      addMesh(new THREE.CylinderGeometry(0.014, 0.014, 0.36, 5), MAT.dark, -0.58, T + 0.2, -0.18, g);
-      addMesh(new THREE.CylinderGeometry(0.06, 0.13, 0.12, 12, 1, true), shadeGlow, -0.58, T + 0.4, -0.18, g);   // 갓은 스스로 빛나요 (진짜 빛은 가운데 등불 하나)
+      addMesh(new THREE.CylinderGeometry(0.07, 0.085, 0.03, 10), MAT.dark, -0.45, T + 0.015, -0.25, g);      // 작은 스탠드 받침 (유리병 뒤쪽 옆: 공부 카메라에서 안 겹치게)
+      addMesh(new THREE.CylinderGeometry(0.014, 0.014, 0.36, 5), MAT.dark, -0.45, T + 0.2, -0.25, g);
+      addMesh(new THREE.CylinderGeometry(0.06, 0.13, 0.12, 12, 1, true), shadeGlow, -0.45, T + 0.4, -0.25, g);   // 갓은 스스로 빛나요 (진짜 빛은 가운데 등불 하나)
       g.position.set(dx, 0, dz); g.rotation.y = hd; scene.add(g);
       const cushion = addMesh(new THREE.CylinderGeometry(0.8, 0.84, 0.14, 20), cushionMat, sx, 0.07, sz);
       cushion.scale.z = 0.92;
@@ -2720,10 +2724,24 @@
     // 내 유리병(오늘 녹은 물)과 이번 주 눈꽃 7칸: 공부 책상에 앉으면 그 책상 위로 옮겨 놓아요
     const JT = DESK.TOP;
     library.mine = new THREE.Group(); library.mine.visible = false; scene.add(library.mine);
-    addMesh(new THREE.CylinderGeometry(0.18, 0.17, 0.48, 18, 1, true), new THREE.MeshLambertMaterial({ color: 0xdfeaff, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }), -0.3, JT + 0.245, 0.1, library.mine);   // 유리 (책 왼쪽 앞: 카메라에서 눈사람 얼굴을 안 가리게)
-    addMesh(new THREE.TorusGeometry(0.18, 0.022, 6, 18), new THREE.MeshLambertMaterial({ color: 0xdfeaff, transparent: true, opacity: 0.5 }), -0.3, JT + 0.485, 0.1, library.mine).rotation.x = Math.PI / 2;   // 병 입구
-    library.water = addMesh(new THREE.CylinderGeometry(0.165, 0.155, 1, 18), new THREE.MeshBasicMaterial({ color: 0x8fd0ff, transparent: true, opacity: 0.85 }), -0.3, JT + 0.01, 0.1, library.mine);   // 물: 높이는 updateStudy가 바꿔요 (0 ~ 0.45)
-    library.water.scale.y = 0.001; library.waterBase = JT + 0.01; library.waterMax = 0.45;
+    const glassMat = new THREE.MeshLambertMaterial({ color: 0xdfeaff, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }), rimMat = new THREE.MeshLambertMaterial({ color: 0xdfeaff, transparent: true, opacity: 0.5 });
+    const waterMat = new THREE.MeshBasicMaterial({ color: 0x8fd0ff, transparent: true, opacity: 0.85 });
+    function makeJar(x, y, z, sc) {   // 유리병 하나 (유리 + 입구 + 물). 물 높이는 0 ~ 0.45 * sc
+      addMesh(new THREE.CylinderGeometry(0.18 * sc, 0.17 * sc, 0.48 * sc, 18, 1, true), glassMat, x, y + 0.245 * sc, z, library.mine);
+      addMesh(new THREE.TorusGeometry(0.18 * sc, 0.022 * sc, 6, 18), rimMat, x, y + 0.485 * sc, z, library.mine).rotation.x = Math.PI / 2;
+      const w = addMesh(new THREE.CylinderGeometry(0.165 * sc, 0.155 * sc, 1, 18), waterMat, x, y + 0.01 * sc, z, library.mine);
+      w.scale.y = 0.001;
+      return w;
+    }
+    library.water = makeJar(-0.56, JT, 0.16, 1.3);   // 지금 채우는 병 (책상 왼쪽 앞: 공부 카메라에서 스탠드·눈사람과 안 겹치게). 높이는 updateStudy가 바꿔요
+    library.waterBase = JT + 0.01 * 1.3; library.waterMax = 0.45 * 1.3;
+    library.fullJars = [[-1.1, 0.22], [-1.1, -0.18], [-1.46, 0.22], [-1.46, -0.18]].map(function (q) {   // 가득 찬 병은 책상 왼쪽 바닥에 (최대 4개 보여요, 공부 카메라에서 눈사람 뒤쪽이라 안 가려요)
+      const w = makeJar(q[0], 0.02, q[1], 1.3);
+      w.scale.y = 0.45 * 1.3; w.position.y = 0.02 + 0.01 * 1.3 + w.scale.y / 2;
+      const g = new THREE.Group(); library.mine.children.slice(-3).forEach(function (m) { g.add(m); }); library.mine.add(g);
+      g.visible = false;
+      return g;
+    });
     const flakeTex = makeCanvasTexture(64, 64, function (g2, w, h) {   // 눈꽃 결정 그림 (여섯 갈래)
       g2.save(); g2.translate(w / 2, h / 2); g2.strokeStyle = "#ffffff"; g2.lineCap = "round"; g2.lineWidth = 4;   // save/restore: 글꼴이 늦게 오면 이 그림을 한 번 더 그려서요
       for (let j = 0; j < 6; j++) {
@@ -4470,9 +4488,10 @@
       osc.start(t); osc.stop(t + q[2] + 0.05);
     });
   }
-  function playBell(kind) {   // 📚 공부 종: 집중이 끝나면 '딩-동'(높은 음 다음 낮은 음), 쉬는 시간이 끝나면 '딩' 한 번
-    if (!audio || !audio.on) { console.log("[🔔 bell] 소리가 꺼져 있어서 종은 안 울림 ->", kind); return; }
-    const ctx = audio.ctx, t0 = ctx.currentTime;
+  function playBell(kind, delay) {   // 📚 공부 종: 집중이 끝나면 '딩-동'(높은 음 다음 낮은 음), 쉬는 시간이 끝나면 '딩' 한 번. delay(초) 뒤에 울리게 미리 걸 수 있어요
+    if (!audio || !audio.on) { console.log("[🔔 bell] 소리가 꺼져 있어서 종은 안 울림 ->", kind); return null; }
+    const ctx = audio.ctx, t0 = ctx.currentTime + (delay || 0), out = ctx.createGain();
+    out.connect(audio.master);   // 이 종만의 출구: 공부를 멈추면 이것만 끊어요
     const notes = kind === "focus" ? [[1046.5, 0], [784, 0.42]] : [[880, 0]];   // [음 높이(Hz), 시작(초)]
     notes.forEach(function (nt) {
       [[1, 0.16, 2.8], [2.76, 0.04, 1.2], [5.4, 0.015, 0.4]].forEach(function (q) {   // 풍경 소리와 같은 배음, 조금 더 부드럽게
@@ -4481,11 +4500,12 @@
         g.gain.setValueAtTime(0.0001, t);
         g.gain.exponentialRampToValueAtTime(q[1], t + 0.006);
         g.gain.exponentialRampToValueAtTime(0.0001, t + q[2]);
-        osc.connect(g); g.connect(audio.master);
+        osc.connect(g); g.connect(out);
         osc.start(t); osc.stop(t + q[2] + 0.05);
       });
     });
-    console.log("[🔔 bell] 공부 종 울림 ->", kind === "focus" ? "집중 끝 (딩-동)" : "쉬는 시간 끝 (딩)");
+    console.log("[🔔 bell] 공부 종", delay ? Math.round(delay) + "초 뒤로 걸어 둠" : "울림", "->", kind === "focus" ? "집중 끝 (딩-동)" : "쉬는 시간 끝 (딩)");
+    return out;
   }
   function playPage() {   // 책장 넘기는 소리: 높은 데서 낮은 데로 '스윽'
     if (!audio || !audio.on) return;
@@ -4673,14 +4693,15 @@
   const STUDY = {
     FOCUS: 25, BREAK: 5,          // 추천 시간(분). 바꾸면 이 브라우저가 기억해요
     MAX_FOCUS: 120, MAX_BREAK: 30,
-    JAR_FULL: 240,                // 유리병이 가득 차는 하루 공부량(분)
+    JAR_FULL: 100,                // 유리병 하나가 가득 차는 공부량(분, 25분 4번). 가득 차면 책상 옆 바닥에 내려놓고 새 병 (2026-11-22 저녁, 240에서 바꿈)
     DRAW_MS: 100,                 // 공부 중엔 0.1초에 한 번만 그려요 (켜 두는 동안 노트북이 뜨거워지지 않게)
     LATE_MS: 120000,              // 끝날 시각보다 2분 넘게 늦게 알아챘으면(컴퓨터가 잠들었으면) 이어서 하지 않고 멈춰요
     REMOTE_WAIT: 90000,           // 친구가 공부 중이면 소식이 끊겨도 90초는 기다려요 (다른 탭에선 브라우저가 느리게 돌아서)
-    CAM_DIST: 6.2, CAM_Y: 3.3, CAM_TURN: 0.28, LOOK_Y: 1.8   // 공부 카메라: 등불 쪽에서 비스듬히 내려다봐요
+    CAM_DIST: 8.5, CAM_Y: 1.85, CAM_TURN: 0.55, LOOK_Y: 1.55, LOOK_FWD: 0.3, LOOK_SIDE: -0.8, LOOK_SINK: 0.7, FOV: 32, MIN_HALF_W: 0.26,   // 공부 카메라: 멀리서 낮게, 좁은 화각(사진처럼 세로선이 똑바로, 비니 아래 눈이 보여요). 거리, 높이, 비스듬한 각, 보는 높이, 보는 점 앞쪽, 옆(넓은 화면), 녹을 때 시선 내림, 화각
+    LONG_EVERY: 4, LONG_BREAK: 15   // 집중을 4번 하면 긴 쉬기 15분, 그다음엔 저절로 이어 가지 않고 '계속할까요?'를 물어요 (켜 두고 떠나도 기록이 부풀지 않게)
   };
   const BASE_TITLE = document.title;
-  const study = { phase: "idle", seat: null, focus: STUDY.FOCUS, brk: STUDY.BREAK, startAt: 0, endAt: 0, melt: 0, timer: 0, drawnAt: 0, skipped: 0, jar: 0, quote: -1, log: { days: {} } };
+  const study = { phase: "idle", seat: null, focus: STUDY.FOCUS, brk: STUDY.BREAK, startAt: 0, endAt: 0, melt: 0, timer: 0, drawnAt: 0, skipped: 0, jar: 0, quote: -1, round: 0, long: false, bell: null, log: { days: {} } };   // round = 이번에 이어서 한 집중 수, long = 지금이 긴 쉬기, bell = 미리 걸어 둔 종
   const studyEl = document.getElementById("study"), studyDim = document.getElementById("studyDim");
   const studyHead = document.getElementById("studyHead"), studyTime = document.getElementById("studyTime"), studyQuote = document.getElementById("studyQuote");
   const studySet = document.getElementById("studySet"), studyFocus = document.getElementById("studyFocus"), studyBreak = document.getElementById("studyBreak");
@@ -4714,7 +4735,8 @@
   }
   function refreshStudyLog() {   // 카드 아래 기록 한 줄 + 책상 위 눈꽃 7칸
     const wk = weekStudied();
-    studyLog.textContent = "오늘 " + fmtMin(todayMinutes()) + " · 이번 주 " + wk.filter(Boolean).length + "일 공부했어요";
+    const jars = Math.floor(todayMinutes() / STUDY.JAR_FULL);
+    studyLog.textContent = "오늘 " + fmtMin(todayMinutes()) + (jars ? " · 병 " + jars + "개" : "") + " · 이번 주 " + wk.filter(Boolean).length + "일 공부했어요";
     library.flakes.forEach(function (sp, i) { sp.material.opacity = wk[i] ? 0.95 : 0.16; });
   }
   function studyMeltNow(now) {   // 집중: 0 -> 1 (녹음), 쉬기: 1 -> 0 (다시 쌓임)
@@ -4735,7 +4757,8 @@
     studyStop.hidden = studyTime.hidden = ph === "idle";
     studyQuote.hidden = ph !== "break";
     studyDim.hidden = ph === "idle";
-    studyHead.textContent = ph === "focus" ? "📚 집중하는 중" : ph === "break" ? "☕ 쉬는 시간" : "📚 공부 책상";
+    studyHead.textContent = ph === "focus" ? "📚 집중하는 중" : ph === "break" ? (study.long ? "☕ 긴 쉬는 시간 (집중 " + study.round + "번 했어요)" : "☕ 쉬는 시간") : "📚 공부 책상";
+    studyGo.textContent = "공부 시작";
     if (ph === "break") studyQuote.textContent = BOOK_LINES[study.quote];
     refreshStudyLog();
     updateStudyClock();
@@ -4744,7 +4767,7 @@
     study.seat = st;
     const dk = library.desks[st.desk];
     library.mine.position.set(dk.x, 0, dk.z); library.mine.rotation.y = dk.heading; library.mine.visible = true;
-    study.jar = clamp(todayMinutes() / STUDY.JAR_FULL, 0, 1);
+    study.jar = (todayMinutes() % STUDY.JAR_FULL) / STUDY.JAR_FULL;
     studyFocus.value = study.focus; studyBreak.value = study.brk;
     studyEl.hidden = false;
     showStudyCard();
@@ -4758,8 +4781,19 @@
     library.mine.visible = false;
     console.log("[📚 study] 공부 책상에서 일어남 -> 이유:", why);
   }
+  function cancelBell() { if (study.bell) { try { study.bell.out.disconnect(); } catch (err) { /* 이미 끊김 */ } study.bell = null; } }
+  function scheduleBell() {   // 끝날 시각의 종을 소리 시계에 미리 걸어 둬요. 다른 탭에서 브라우저가 1초 타이머를 1분까지 늦춰도 종은 제때 울려요
+    cancelBell();
+    if (study.phase === "idle") return;
+    const delay = (study.endAt - Date.now()) / 1000;
+    if (delay < 0.05) return;
+    const out = playBell(study.phase, delay);
+    if (out) study.bell = { at: study.endAt, out: out };
+  }
   function beginPhase(ph, at, why) {
-    study.phase = ph; study.startAt = at; study.endAt = at + (ph === "focus" ? study.focus : study.brk) * 60000;
+    study.long = ph === "break" && study.round > 0 && study.round % STUDY.LONG_EVERY === 0;   // 집중 4번째가 끝난 쉬기는 길게
+    const mins = ph === "focus" ? study.focus : study.long ? Math.max(STUDY.LONG_BREAK, study.brk) : study.brk;
+    study.phase = ph; study.startAt = at; study.endAt = at + mins * 60000;
     if (ph === "break") {   // 명언은 쉬는 시간에만 한 줄 (방금 본 줄은 빼고)
       let q = Math.floor(Math.random() * BOOK_LINES.length);
       if (q === study.quote) q = (q + 1) % BOOK_LINES.length;
@@ -4768,7 +4802,8 @@
     study.melt = studyMeltNow(Date.now());
     net.lastSent = -1e9;   // 친구에게 바로 알려요
     showStudyCard();
-    console.log("[⏳ study] 시작 ->", ph === "focus" ? "집중" : "쉬기", (ph === "focus" ? study.focus : study.brk) + "분 | 끝나는 시각:", new Date(study.endAt).toLocaleTimeString(), "| 이유:", why);
+    scheduleBell();
+    console.log("[⏳ study] 시작 ->", ph === "focus" ? "집중" : study.long ? "긴 쉬기" : "쉬기", mins + "분 | 이어서 한 집중:", study.round, "번 | 끝나는 시각:", new Date(study.endAt).toLocaleTimeString(), "| 이유:", why);
   }
   function startStudy(why) {
     if (!study.seat) return;
@@ -4776,6 +4811,7 @@
     study.brk = cleanMinutes(studyBreak.value, STUDY.BREAK, STUDY.MAX_BREAK);
     try { localStorage.setItem("softplace-study-set", JSON.stringify({ f: study.focus, b: study.brk })); } catch (err) { /* 저장 못 해도 이번엔 이 시간으로 해요 */ }
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();   // 숫자 칸에서 빠져나와야 E로 일어날 수 있어요
+    study.round = 0;
     beginPhase("focus", Date.now(), why);
     clearInterval(study.timer);
     study.timer = setInterval(studyTick, 1000);
@@ -4784,7 +4820,8 @@
     if (study.phase === "idle") return;
     const was = study.phase;
     if (was === "focus") addStudyMinutes((Date.now() - study.startAt) / 60000, "집중 중간에 멈춤 (" + why + ")");   // 중간에 멈춰도 한 만큼은 남겨요 (벌처럼 안 느껴지게)
-    study.phase = "idle"; study.melt = 0;
+    study.phase = "idle"; study.melt = 0; study.long = false;
+    cancelBell();
     clearInterval(study.timer); study.timer = 0;
     net.lastSent = -1e9;
     showStudyCard();
@@ -4794,11 +4831,20 @@
     if (study.phase === "idle") return;
     const now = Date.now();
     if (now >= study.endAt) {
-      const ended = study.phase, endAt = study.endAt, late = now - endAt > STUDY.LATE_MS;
-      if (ended === "focus") addStudyMinutes(study.focus, "집중 끝");
-      playBell(ended);
-      if (late) {   // 컴퓨터가 잠들었거나 창이 오래 얼어 있었어요: 저절로 이어 가지 않아요
-        study.phase = "idle"; study.melt = 0;
+      const ended = study.phase, endAt = study.endAt, late = now - endAt > STUDY.LATE_MS, wasLong = study.long;
+      if (ended === "focus") { study.round++; addStudyMinutes(study.focus, "집중 끝 (" + study.round + "번째)"); }
+      if (study.bell && study.bell.at === endAt) study.bell = null;   // 미리 걸어 둔 종은 이미 울렸거나 울리는 중이라 끊지 않아요
+      else { cancelBell(); playBell(ended); }
+      if (!late && ended === "break" && wasLong) {   // 긴 쉬기가 끝나면 저절로 이어 가지 않고 물어봐요
+        study.phase = "idle"; study.melt = 0; study.long = false;
+        clearInterval(study.timer); study.timer = 0;
+        net.lastSent = -1e9;
+        showStudyCard();
+        studyHead.textContent = "☕ " + study.round + "번 집중했어요. 계속할까요?";
+        studyGo.textContent = "계속하기";
+        console.log("[⏳ study] 긴 쉬기 끝 -> 저절로 이어 가지 않고 물어봄 | 이어서 한 집중:", study.round, "번");
+      } else if (late) {   // 컴퓨터가 잠들었거나 창이 오래 얼어 있었어요: 저절로 이어 가지 않아요
+        study.phase = "idle"; study.melt = 0; study.long = false;
         clearInterval(study.timer); study.timer = 0;
         net.lastSent = -1e9;
         showStudyCard();
@@ -4819,8 +4865,10 @@
     if (parts.melt !== target) setMelt(parts, Math.abs(target - parts.melt) < 0.002 ? target : parts.melt + (target - parts.melt) * (1 - Math.exp(-dt * 3)));
     if (library.mine.visible) {   // 지금 하고 있는 집중도 물로 쳐요 (눈사람이 녹는 만큼 병이 차올라요)
       const doing = study.phase === "focus" ? (now - study.startAt) / 60000 : 0;
-      const fill = clamp((todayMinutes() + doing) / STUDY.JAR_FULL, 0, 1);
+      const total = todayMinutes() + doing, fill = (total % STUDY.JAR_FULL) / STUDY.JAR_FULL, jars = Math.floor(total / STUDY.JAR_FULL);
+      if (fill < study.jar - 0.5) { study.jar = 0; console.log("[🫙 study] 병이 가득 참 -> 책상 옆에 내려놓고 새 병 | 오늘 병", jars, "개"); }   // 가득 찬 병은 내려놓고 빈 병부터
       study.jar += (fill - study.jar) * (1 - Math.exp(-dt * 1.5));
+      library.fullJars.forEach(function (g, i) { g.visible = i < jars; });
       const h = Math.max(0.001, study.jar * library.waterMax);
       library.water.scale.y = h; library.water.position.y = library.waterBase + h / 2;
     }
@@ -5860,6 +5908,21 @@
     note(st.face + " " + st.taste + " (오늘 " + mallow.eaten + "개째)", 5000);
     console.log("[🍡 mallow] 먹음 -> 익은 정도:", mallow.cook.toFixed(2), "| 단계:", st.name, "| 소리:", st.sound, "| 지금까지:", mallow.eaten);
   }
+  // 📚 공부 스탠드 빛: 마시멜로 손 빛(mallow.fill)을 빌려 써요 (둘은 같이 켜질 일이 없어요). 새 빛을 넣으면 조명 수가 바뀌어 모든 재질이 다시 만들어지고 화면이 멈춰서요
+  const STUDY_LAMP = { X: -0.45, Y: 0.83, Z: -0.25, COLOR: 0xffc27a, POWER: 2.1, DIST: 3.8 };   // 책상 기준 스탠드 갓 자리, 빛 색, 세기, 닿는 거리(m)
+  let lampBorrowed = false;
+  function updateStudyLamp() {   // updateMallow 다음에 불러요 (그쪽이 안 쓸 땐 매번 빛을 0으로 돌려 놓으니까)
+    const st = player.seat, on = state.mode === "play" && !!st && st.kind === "study" && !mallow.on, L = mallow.fill;
+    if (on) {
+      const dk = library.desks[st.desk], c = Math.cos(dk.heading), sn = Math.sin(dk.heading);
+      L.position.set(dk.x + STUDY_LAMP.X * c + STUDY_LAMP.Z * sn, STUDY_LAMP.Y, dk.z - STUDY_LAMP.X * sn + STUDY_LAMP.Z * c);
+      if (!lampBorrowed) { L.color.setHex(STUDY_LAMP.COLOR); L.distance = STUDY_LAMP.DIST; lampBorrowed = true; console.log("[💡 study] 책상 스탠드 켬 (마시멜로 손 빛을 빌림) -> 책상", st.desk + 1); }
+      L.intensity = STUDY_LAMP.POWER;
+    } else if (lampBorrowed) {
+      L.color.setHex(0xffd8b8); L.distance = 2.2; L.intensity = 0; lampBorrowed = false;
+      console.log("[💡 study] 책상 스탠드 끔 (마시멜로 손 빛 돌려줌)");
+    }
+  }
   function mallowOff() { mallow.on = false; mallow.burning = 0; mallow.pushTarget = 0; mallow.inspect = -1; refreshFireTools(); }
   function updateMallow(dt, t) {   // updateCamera 다음에 불러요 (손이 화면 기준이라서)
     const seat = player.seat, show = mallow.on && state.mode === "play" && !!seat && seat.kind === "fire";
@@ -6415,15 +6478,19 @@
       turnLook(tmpV, look);
     }
     if (state.mode === "play" && player.seat && player.seat.kind === "study" && !state.aerial && !state.zen) {
-      const ss = player.seat, h = ss.heading + STUDY.CAM_TURN;   // 📚 공부: 책상 너머 등불 쪽에서 내 눈사람을 비스듬히 내려다봐요 (녹는 게 보이게)
-      tmpV.set(ss.x + Math.sin(h) * STUDY.CAM_DIST, STUDY.CAM_Y, ss.z + Math.cos(h) * STUDY.CAM_DIST);
-      look.set(ss.x + Math.sin(ss.heading) * 0.5, STUDY.LOOK_Y, ss.z + Math.cos(ss.heading) * 0.5);
+      const ss = player.seat, h = ss.heading + STUDY.CAM_TURN, sink = player.parts.melt * STUDY.LOOK_SINK;   // 📚 공부: 책상 너머에서 낮게, 좁은 화각으로 (사진처럼 세로선이 똑바로, 비니 아래 눈이 보이게). 녹을수록 시선도 조금 내려가요
+      tmpV.set(ss.x + Math.sin(h) * STUDY.CAM_DIST, STUDY.CAM_Y - sink * 0.5, ss.z + Math.cos(h) * STUDY.CAM_DIST);
+      const side = camera.aspect > 1.2 ? STUDY.LOOK_SIDE : 0;   // 넓은 화면: 카드가 왼쪽에 있으니 눈사람을 화면 오른쪽 1/3쯤에
+      look.set(ss.x + Math.sin(ss.heading) * STUDY.LOOK_FWD + Math.cos(h) * side, STUDY.LOOK_Y - sink, ss.z + Math.cos(ss.heading) * STUDY.LOOK_FWD - Math.sin(h) * side);
     }
     if (state.mode === "play" && eyesOnly(player.seat) && breath.on) {   // 숨 쉬듯 아주 천천히 오르내려요 (B로 끄기)
       const b = Math.cos(surfPhase() * Math.PI * 2) * BREATH.AMP;   // 파도가 밀려오는 동안 들이쉬고(올라감), 부서진 뒤 빠지는 동안 내쉬어요
       tmpV.y += b; look.y += b * 0.6;
     }
     const k = 1 - Math.exp(-dt * 6);
+    const wantFov = state.mode === "play" && player.seat && player.seat.kind === "study" && !state.aerial && !state.zen
+      ? Math.max(STUDY.FOV, 2 * Math.atan(STUDY.MIN_HALF_W / camera.aspect) * 180 / Math.PI) : BASE_FOV;   // 공부 자리만 좁은 화각 (세로로 긴 폰에선 눈사람과 책상이 옆으로 잘리지 않을 만큼 넓혀요)
+    if (Math.abs(camera.fov - wantFov) > 0.01) { camera.fov = Math.abs(camera.fov - wantFov) < 0.05 ? wantFov : camera.fov + (wantFov - camera.fov) * k; camera.updateProjectionMatrix(); }
     cam.pos.lerp(tmpV, k);
     cam.look.lerp(look, k);
     camera.position.copy(cam.pos);
@@ -6471,6 +6538,7 @@
     updateCamera(dt);
     updateCamBasis();
     updateMallow(dt, t);   // 1인칭 손·꼬챙이는 카메라 기준이라 카메라 다음에
+    updateStudyLamp();
     updateSprinkle(dt);
     targetRing.material.opacity = Math.max(0, targetRing.material.opacity - dt * 0.6);
     if (rain.mirrorFn) rain.mirrorFn();   // 비 오는 숲 연못에 비친 장면 (앉아 있을 때만)
@@ -6485,7 +6553,7 @@
   // 🧪 시험 손잡이: tools/ 시험 대본이 게임 상태를 읽는 곳이에요. 화면과 동작은 바꾸지 않아요.
   window.__soft = {
     state: state, player: player, cam: cam, fire: fire, mallow: mallow, sprinkle: sprinkle, ashes: ashes,
-    net: net, others: others, printBorn: printBorn, LOOK_LIMIT: LOOK_LIMIT, renderer: renderer, scene: scene, breath: breath, seats: seats, spring: spring, peaks: peaks, rain: rain, grove: grove, sky: sky, aurora: aurora, chimes: chimes, gateSigns: gateSigns, study: study, library: library,
+    net: net, others: others, printBorn: printBorn, LOOK_LIMIT: LOOK_LIMIT, renderer: renderer, scene: scene, breath: breath, seats: seats, spring: spring, peaks: peaks, rain: rain, grove: grove, sky: sky, aurora: aurora, chimes: chimes, gateSigns: gateSigns, study: study, STUDY: STUDY, STUDY_LAMP: STUDY_LAMP, library: library,
     get audio() { return audio; },
     get frame() { return frame; },
     sound: {   // 소리 시험: 소리 엔진을 잠깐 OfflineAudioContext로 바꿔 끼우고 소리 함수를 불러 크기를 재요
