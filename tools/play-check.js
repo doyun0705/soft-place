@@ -38,6 +38,7 @@ const BEACH_BENCH = { x: 4, z: 81.8, yaw: 0 };   // 파도 해변 벤치 앞 (E 
 const SPRING_EDGE = { x: -65.9, z: 72, yaw: 0 };   // 눈꽃 온천 남쪽 물가 (E 누르면 몸을 담가요)
 const CHIMES_BENCH = { x: 70.4, z: 69.3, yaw: 0 };   // 풍경 나무 동남쪽 벤치 앞 (E 누르면 느티나무와 북쪽 하늘을 보고 앉아요)
 const RAIN_BENCH = { x: -80, z: 0.3, yaw: 0 };   // 비 오는 숲 정자 마루 가운데 (E 누르면 마루 안쪽에 앉아 남쪽 연못을 봐요)
+const STUDY_DESK = { x: -68.84, z: -66.98, yaw: 0 };   // 눈 속 도서관 공부 책상 3 앞 (E 누르면 방석에 앉아요)
 
 // ---------- 작은 웹 서버: 저장소 폴더를 그대로 보여 줘요 ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript', '.jpg': 'image/jpeg', '.png': 'image/png', '.json': 'application/json' };
@@ -451,6 +452,134 @@ const tests = {
     },
   },
 
+  study: {
+    what: '공부 책상: 3인칭으로 앉고, 집중하면 녹고, 끝나면 기록·쉬는 시간·명언, 쉬고 나면 저절로 다음 집중, 늦게 알아채면 멈춤, 일어나면 한 만큼 기록',
+    run: async t => {
+      const ctx = await newContext();
+      const p = await open(ctx, t, STUDY_DESK);
+      const S = () => p.evaluate(() => {
+        const s = window.__soft.study, d = JSON.parse(localStorage.getItem('softplace-study') || '{"days":{}}').days;
+        return { phase: s.phase, melt: s.melt, shown: window.__soft.player.parts.melt, title: document.title, today: Object.values(d).reduce((a, b) => a + b, 0),
+          head: document.getElementById('studyHead').textContent, quote: document.getElementById('studyQuote').textContent, card: !document.getElementById('study').hidden };
+      });
+      // 시간을 앞으로 감기: 지금 단계의 시작·끝을 ms만큼 앞당겨요 (실제 시계로 재니까 이렇게 시험해요)
+      const skip = ms => p.evaluate(m => { const s = window.__soft.study; s.startAt -= m; s.endAt -= m; }, ms);
+      const endSoon = () => p.evaluate(() => { const s = window.__soft.study, len = s.endAt - s.startAt; s.endAt = Date.now() + 300; s.startAt = s.endAt - len; });
+      await sit(p, 'study');
+      await frames(p, 3);
+      const a = await p.evaluate(() => ({ seat: window.__soft.player.seat, shown: window.__soft.player.parts.group.visible, watching: document.body.classList.contains('watching'),
+        card: !document.getElementById('study').hidden, mine: window.__soft.library.mine.visible }));
+      check(t, a.shown && a.watching && a.card && a.mine, '책상에 앉으면 3인칭(내 눈사람 보임) + 화면 글씨 숨김 + 공부 카드 + 내 유리병', a);
+      await p.fill('#studyFocus', '30'); await p.fill('#studyBreak', '7');
+      await p.click('#studyGo');
+      let s = await S();
+      const len = await p.evaluate(() => [(window.__soft.study.endAt - window.__soft.study.startAt) / 60000, localStorage.getItem('softplace-study-set')]);
+      check(t, s.phase === 'focus' && s.title.startsWith('⏳') && len[0] === 30 && len[1] === '{"f":30,"b":7}', '고른 시간(30/7)으로 집중 시작, 탭 제목에 남은 시간, 설정 기억', { s, len });
+      await skip(18 * 60000);   // 30분 중 60%
+      await until(p, () => window.__soft.player.parts.melt > 0.5, null, '눈사람이 60%쯤 녹기');
+      s = await S();
+      const shape = await p.evaluate(() => {   // 몸통 높이: 바닥은 그대로 두고 위에서부터 내려앉아요 (바닥 아래로 가라앉지 않아요)
+        const P = window.__soft.player.parts, g = P.body.geometry;
+        g.computeBoundingBox();
+        const b = g.boundingBox, sy = P.body.scale.y, y0 = P.body.position.y, base = g.userData.base, pos = g.attributes.position;
+        let w0 = 0, w = 0;   // 몸통 공 아래쪽 줄(24번, 맨 아래 가까이)의 둘레 반지름: 녹기 전 / 지금
+        for (let c = 0; c < 40; c++) { const i = 24 * 41 + c; w0 += Math.hypot(base[i * 3], base[i * 3 + 2]) / 40; w += Math.hypot(pos.getX(i), pos.getZ(i)) / 40; }
+        return { bottom: +(y0 + b.min.y * sy).toFixed(3), top: +(y0 + b.max.y * sy).toFixed(3), wide0: +(w0 * P.body.scale.x).toFixed(2), wide: +(w * P.body.scale.x).toFixed(2), puddle: P.puddle.visible, wet: +P.wetMat.opacity.toFixed(2) };
+      });
+      check(t, s.melt > 0.55 && s.melt < 0.65 && shape.bottom > -0.05 && shape.top < 1.45 && shape.wide > shape.wide0 * 1.3 && shape.puddle && shape.wet > 0.5,
+        '18분 지나면 60% 녹음: 바닥은 그대로(' + shape.bottom + '), 꼭대기 1.71 -> ' + shape.top + ', 아랫자락 ' + shape.wide0 + ' -> ' + shape.wide + ', 웅덩이·젖은 반짝임', { s, shape });
+      const fps = await p.evaluate(() => new Promise(r => { const f0 = window.__soft.frame, t0 = performance.now(); setTimeout(() => r((window.__soft.frame - f0) / ((performance.now() - t0) / 1000)), 2000); }));
+      check(t, fps <= 12, '공부 중엔 1초에 10번쯤만 그림 (' + fps.toFixed(1) + '번)');
+      await shot(t, p, 'focus');
+      await endSoon();
+      await until(p, () => window.__soft.study.phase === 'break', null, '집중 끝 -> 쉬는 시간');
+      s = await S();
+      check(t, s.today >= 30 && s.quote.length > 5 && s.title.startsWith('☕'), '집중이 끝나면 30분 기록, 쉬는 시간엔 명언 한 줄, 탭 제목 ☕', s);
+      const flake = await p.evaluate(() => { const i = (new Date().getDay() + 6) % 7; return window.__soft.library.flakes[i].material.opacity; });
+      check(t, flake > 0.9, '오늘 칸 눈꽃이 켜짐');
+      await skip(3.5 * 60000);   // 7분 중 절반
+      await frames(p, 3);
+      s = await S();
+      check(t, s.melt > 0.4 && s.melt < 0.6, '쉬는 동안 다시 쌓임 (절반쯤 ' + s.melt.toFixed(2) + ')');
+      await shot(t, p, 'break');
+      await endSoon();
+      await until(p, () => window.__soft.study.phase === 'focus', null, '쉬는 시간 끝 -> 저절로 다음 집중');
+      check(t, (await S()).today >= 30 && (await S()).today < 31, '쉬는 시간은 기록에 안 들어감');
+      // 집중 4번째가 끝나면 긴 쉬기 15분, 그 뒤엔 저절로 이어 가지 않고 '계속할까요?' (켜 두고 떠나도 기록이 안 부풀게)
+      await p.evaluate(() => { window.__soft.study.round = 3; });
+      await endSoon();
+      await until(p, () => window.__soft.study.phase === 'break', null, '4번째 집중 끝 -> 긴 쉬기');
+      const lb = await p.evaluate(() => ({ len: (window.__soft.study.endAt - window.__soft.study.startAt) / 60000, head: document.getElementById('studyHead').textContent, round: window.__soft.study.round }));
+      check(t, lb.len === 15 && lb.head.includes('긴') && lb.round === 4, '집중 4번이면 긴 쉬기 15분', lb);
+      await endSoon();
+      await until(p, () => window.__soft.study.phase === 'idle', null, '긴 쉬기 끝 -> 멈추고 물어보기');
+      const ask = await p.evaluate(() => ({ head: document.getElementById('studyHead').textContent, go: document.getElementById('studyGo').textContent, shown: !document.getElementById('studyGo').hidden, title: document.title, today: Object.values(JSON.parse(localStorage.getItem('softplace-study')).days).reduce((a, b) => a + b, 0) }));
+      check(t, ask.head.includes('계속할까요') && ask.go === '계속하기' && ask.shown && ask.title.startsWith('☕ 계속할까요') && ask.today >= 60 && ask.today < 61, '긴 쉬기 뒤엔 저절로 이어 가지 않고 "계속할까요?" 물어봄 (기록 60분)', ask);
+      const jar = await p.evaluate(() => ({ full: window.__soft.library.fullJars.filter(g => g.visible).length, log: document.getElementById('studyLog').textContent }));
+      check(t, jar.full === 0 && !jar.log.includes('병'), '100분 전엔 가득 찬 병 없음', jar);
+      await p.click('#studyGo');
+      await until(p, () => window.__soft.study.phase === 'focus' && window.__soft.study.round === 0, null, '계속하기 -> 다시 집중 (센 수는 처음부터)');
+      await p.evaluate(() => { const s = window.__soft.study; s.endAt = Date.now() - 3 * 60000; s.startAt = s.endAt - 30 * 60000; });   // 컴퓨터가 잠들었다 깬 것처럼
+      await until(p, () => window.__soft.study.phase === 'idle', null, '늦게 알아채면 멈추기');
+      s = await S();
+      check(t, s.head.includes('자리를 비운') && s.today >= 90 && s.today < 91 && s.title === 'Soft Place', '끝날 시각을 3분 넘겨 알아채면 그 집중만 기록하고 이어 가지 않음', s);
+      // 끝날 시각을 넘긴 채 1초 타이머보다 먼저 멈추면(그만하기·창 닫기) 정한 시간까지만 기록해요 (Codex K8 #12: 28분이 기록되던 버그)
+      for (const how of ['그만하기', '창 닫기']) {
+        const before = (await S()).today;
+        await p.click('#studyGo');
+        const len = await p.evaluate(h => {   // 시각 옮기기와 멈추기를 한 번에 해서 1초 타이머가 끼어들 틈이 없게
+          const st = window.__soft.study, L = st.endAt - st.startAt;
+          st.endAt = Date.now() - 3 * 60000; st.startAt = st.endAt - L;
+          if (h === '그만하기') document.getElementById('studyStop').click(); else window.dispatchEvent(new Event('pagehide'));
+          return L / 60000;
+        }, how);
+        s = await S();
+        check(t, s.phase === 'idle' && Math.abs(s.today - before - len) < 0.05, how + ': 끝날 시각을 3분 넘겨 멈춰도 정한 ' + len + '분만 기록', { before, after: s.today });
+      }
+      const base = (await S()).today;
+      await p.click('#studyGo');
+      await skip(2 * 60000);
+      await press(p, 'KeyE');
+      await until(p, () => !window.__soft.player.seat, null, 'E로 일어나기');
+      await until(p, () => window.__soft.player.parts.melt === 0, null, '일어나면 눈사람 원래대로');
+      s = await S();
+      check(t, s.phase === 'idle' && !s.card && s.today - base >= 2 && s.today - base < 3 && s.title === 'Soft Place', '중간에 일어나도 한 만큼(2분) 기록, 카드·제목 원래대로', s);
+      await ctx.close();
+    },
+  },
+
+  studyRoom: {
+    what: '같이 공부: 친구 방(코드 방)에선 서로 녹는 모습이 보이고, 랜덤 방에선 안 보내요 (같은 브라우저 탭 2개)',
+    run: async t => {
+      const ctx = await newContext({ width: 640, height: 480 });
+      const both = async (kind, room) => {
+        const A = await open(ctx, t, Object.assign({ kind, room }, STUDY_DESK));
+        const B = await open(ctx, t, Object.assign({ kind, room }, STUDY_DESK, { x: STUDY_DESK.x + 1.5 }));
+        await until(B, () => Object.keys(window.__soft.others).length === 1, null, kind + ' 방에서 B가 A 보기');
+        await A.bringToFront();
+        await sit(A, 'study');
+        await A.click('#studyGo');
+        await A.evaluate(() => { const s = window.__soft.study; s.startAt -= 15 * 60000; s.endAt -= 15 * 60000; window.__soft.net.lastSent = -1e9; });   // 25분 중 60%
+        return { A, B };
+      };
+      const remote = B => B.evaluate(() => { const o = Object.values(window.__soft.others)[0]; return o && { s: o.s, melt: o.parts.melt }; });
+      const f = await both('prv', 'QZ7K');
+      await until(f.B, () => { const o = Object.values(window.__soft.others)[0]; return o && o.s > 0.5; }, null, '친구 방: B 화면에서 A가 녹기');
+      const r1 = await remote(f.B);
+      check(t, r1.s > 0.55 && r1.s < 0.65 && Math.abs(r1.melt - r1.s) < 0.01, '친구 방에선 A가 녹은 정도(60%)가 B에게 보임', r1);
+      await f.A.click('#studyStop');
+      await until(f.B, () => { const o = Object.values(window.__soft.others)[0]; return o && o.s < 0 && o.parts.melt === 0; }, null, '그만하면 B 화면에서도 원래대로');
+      check(t, true, 'A가 그만하면 B 화면에서도 원래 눈사람');
+      await f.A.close(); await f.B.close();
+      const g = await both('pub', 'WX3P');
+      await frames(g.B, 6);
+      await g.B.waitForTimeout(1500);
+      const r2 = await remote(g.B), aStudy = await g.A.evaluate(() => window.__soft.study.melt);
+      check(t, aStudy > 0.5 && r2 && r2.s === -1 && r2.melt === 0, '랜덤 방에선 A가 녹고 있어도(' + aStudy.toFixed(2) + ') 안 보냄: B에겐 그냥 앉아 있는 눈사람', r2);
+      await ctx.close();
+    },
+  },
+
   sound: {
     what: '소리 크기: 소리 함수를 OfflineAudioContext로 그려서 나는지, 모닥불(RMS 0.06~0.09)에 안 묻히는지 재요',
     run: async t => {
@@ -468,6 +597,7 @@ const tests = {
         ['와삭 (캐러멜)', "S.playEat('crunch')", 1.4, 0.04],
         ['탄 것 먹기 + 기침', "S.playEat('burnt')", 2.6, 0.13],
         ["장작 '타닥' 20번", 'for (let i = 0; i < 20; i++) S.crackle(0.6, 0.05 + i * 0.06, i === 10)', 1.5, 0.01],   // 하나하나는 크기가 제멋대로라 여러 번
+        ["공부 종 '딩-동'", "S.playBell('focus')", 3.4, 0.055],
       ];
       const rows = [];
       for (const [name, call, dur, need] of list) {

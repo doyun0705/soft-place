@@ -80,6 +80,9 @@
           "t": {
             ".validate": "newData.isNumber() && newData.val() <= now"
           },
+          "s": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+          },
           "$other": {
             ".validate": false
           }
