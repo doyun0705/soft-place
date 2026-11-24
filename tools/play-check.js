@@ -478,8 +478,16 @@ const tests = {
       await skip(18 * 60000);   // 30분 중 60%
       await until(p, () => window.__soft.player.parts.melt > 0.5, null, '눈사람이 60%쯤 녹기');
       s = await S();
-      const sink = await p.evaluate(() => window.__soft.player.parts.meltG.position.y);
-      check(t, s.melt > 0.55 && s.melt < 0.65 && sink < -0.5, '18분 지나면 60% 녹음 (웅덩이로 가라앉음 ' + sink.toFixed(2) + ')', s);
+      const shape = await p.evaluate(() => {   // 몸통 높이: 바닥은 그대로 두고 위에서부터 내려앉아요 (바닥 아래로 가라앉지 않아요)
+        const P = window.__soft.player.parts, g = P.body.geometry;
+        g.computeBoundingBox();
+        const b = g.boundingBox, sy = P.body.scale.y, y0 = P.body.position.y, base = g.userData.base, pos = g.attributes.position;
+        let w0 = 0, w = 0;   // 몸통 공 아래쪽 줄(24번, 맨 아래 가까이)의 둘레 반지름: 녹기 전 / 지금
+        for (let c = 0; c < 40; c++) { const i = 24 * 41 + c; w0 += Math.hypot(base[i * 3], base[i * 3 + 2]) / 40; w += Math.hypot(pos.getX(i), pos.getZ(i)) / 40; }
+        return { bottom: +(y0 + b.min.y * sy).toFixed(3), top: +(y0 + b.max.y * sy).toFixed(3), wide0: +(w0 * P.body.scale.x).toFixed(2), wide: +(w * P.body.scale.x).toFixed(2), puddle: P.puddle.visible, wet: +P.wetMat.opacity.toFixed(2) };
+      });
+      check(t, s.melt > 0.55 && s.melt < 0.65 && shape.bottom > -0.05 && shape.top < 1.45 && shape.wide > shape.wide0 * 1.3 && shape.puddle && shape.wet > 0.5,
+        '18분 지나면 60% 녹음: 바닥은 그대로(' + shape.bottom + '), 꼭대기 1.71 -> ' + shape.top + ', 아랫자락 ' + shape.wide0 + ' -> ' + shape.wide + ', 웅덩이·젖은 반짝임', { s, shape });
       const fps = await p.evaluate(() => new Promise(r => { const f0 = window.__soft.frame, t0 = performance.now(); setTimeout(() => r((window.__soft.frame - f0) / ((performance.now() - t0) / 1000)), 2000); }));
       check(t, fps <= 12, '공부 중엔 1초에 10번쯤만 그림 (' + fps.toFixed(1) + '번)');
       await shot(t, p, 'focus');
